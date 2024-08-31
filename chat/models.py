@@ -89,13 +89,13 @@ class Attachment(BaseModel):
     """Model to store file attachments for messages."""
 
     attachment = models.FileField(
-        upload_to="media/attachments/",
+        upload_to="attachments/",
         null=True,
         blank=True,
         help_text="File attached to the message, can be any type of file.",
     )
     image = VersatileImageField(
-        upload_to="media/images/",
+        upload_to="images/",
         null=True,
         blank=True,
         help_text="Image file attached to the message.",
