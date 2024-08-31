@@ -1,3 +1,5 @@
+from rest_framework_simplejwt.tokens import AccessToken
+
 from .models import ChatRoom
 
 
@@ -26,3 +28,32 @@ def generate_private_room_name(user1, user2):
     # Generate a unique chat room
     user_ids = sorted([user1.id, user2.id])
     return f"private_{user_ids[0]}_{user_ids[1]}"
+
+
+def validate_token(token):
+    """Validate the token and return the user_id"""
+    try:
+        access_token = AccessToken(token)
+        user_id = access_token.payload["user_id"]
+        return user_id
+    except Exception as e:
+        return None
+
+
+def get_token_from_scope(scope):
+    """Extract the token from the scope."""
+
+    headers = dict(scope.get("headers", {}))
+
+    # Extract the authorizations header
+    authorizations = headers.get(b"authorizations")
+
+    if authorizations:
+        # Decode the bytes to a string
+        decoded_auth = authorizations.decode("utf-8")
+        # Split the string and check if it contains at least two parts
+        parts = decoded_auth.split(" ")
+        if len(parts) == 2 and parts[0] == "Bearer":
+            return parts[1]
+    else:
+        return None
