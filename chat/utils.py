@@ -18,16 +18,16 @@ def get_or_create_private_chat(user1, user2):
     return room
 
 
-def generate_private_room_name(user1, user2):
+def generate_private_room_name(sender, receiver):
     """Generate a unique name for a private chat room between two users."""
 
     # Ensure that the users are not the same
-    if user1 == user2:
+    if sender == receiver:
         raise ValueError("Users must be different")
 
     # Generate a unique chat room
-    user_ids = sorted([user1.id, user2.id])
-    return f"private_{user_ids[0]}_{user_ids[1]}"
+    user_ids = sorted([sender.id, receiver.id])
+    return f"private_room_{user_ids[0]}_{user_ids[1]}"
 
 
 def validate_token(token):
