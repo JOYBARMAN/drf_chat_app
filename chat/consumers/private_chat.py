@@ -12,10 +12,10 @@ from channels.db import database_sync_to_async
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
+CONNECTED_USERS = set()
 
 
 class PrivateChatConsumer(AsyncWebsocketConsumer):
-
     async def connect(self):
         # Accept connection
         await self.accept()
@@ -40,6 +40,9 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             self.channel_name,
         )
 
+        # Add to connected user
+        CONNECTED_USERS.add(self.sender.id)
+
     async def disconnect(self, close_code):
         # Remove user from the group
         await self.channel_layer.group_discard(
@@ -47,6 +50,9 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             self.channel_name,
         )
         logger.warning(f"disconnected {close_code}")
+
+        # Remove user from connected user
+        CONNECTED_USERS.remove(self.sender.id)
 
         await self.close()
 
@@ -67,6 +73,16 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             content=data["message"], sender=self.sender, chat_room=self.room
         )
         data["message_uid"] = str(self.message_instance.uid)
+
+        # Update real time message read by funtionality
+        if self.sender.id in CONNECTED_USERS and self.receiver.id in CONNECTED_USERS:
+            await database_sync_to_async(self.message_instance.read_by.add)(
+                self.sender, self.receiver
+            )
+            data["read_by"] = [self.sender.username, self.receiver.username]
+        else:
+            await database_sync_to_async(self.message_instance.read_by.add)(self.sender)
+            data["read_by"] = [self.sender.username]
 
         # Broadcast data to the group
         await self.channel_layer.group_send(
