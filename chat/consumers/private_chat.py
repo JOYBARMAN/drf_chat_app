@@ -4,7 +4,7 @@ import logging
 from django.contrib.auth import get_user_model
 
 from chat.models import ChatRoom, Message
-from chat.utils import generate_private_room_name, get_or_create_private_chat
+from chat.utils import generate_private_room_name
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -63,9 +63,10 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         data["room"] = self.room.name
 
         # Create message instance
-        await database_sync_to_async(Message.objects.create)(
+        self.message_instance = await database_sync_to_async(Message.objects.create)(
             content=data["message"], sender=self.sender, chat_room=self.room
         )
+        data["message_uid"] = str(self.message_instance.uid)
 
         # Broadcast data to the group
         await self.channel_layer.group_send(
