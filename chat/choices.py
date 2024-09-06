@@ -18,3 +18,17 @@ class ReactionChoices(TextChoices):
     CUTE = "CUTE", "Cute"
     LOVE = "LOVE", "Love"
     WOW = "WOW", "Wow"
+
+
+class UserRoleChoices(TextChoices):
+    ADMIN = "ADMIN", "Admin"
+    CO_ADMIN = "CO_ADMIN", "Co Admin"
+    MODERATOR = "MODERATOR", "Moderator"
+    MEMBER = "MEMBER", "Member"
+    VIEWER = "VIEWER", "Viewer"
+
+class InvitationStatusChoices(TextChoices):
+    PENDING = "PENDING", "Pending"
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
+    CANCELLED = "CANCELLED", "Cancelled"

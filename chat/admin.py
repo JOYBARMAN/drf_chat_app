@@ -1,57 +1,222 @@
 from django.contrib import admin
 
-from .models import ChatRoom, Attachment, Message, MessageReaction
+from .models import (
+    ChatRoom,
+    ChatRoomMembership,
+    ChatRoomInvitation,
+    Attachment,
+    Message,
+    MessageReaction,
+)
+
+
+class BaseModelAdmin(admin.ModelAdmin):
+    """Base Model Admin with common fields from BaseModel."""
+
+    readonly_fields = [
+        "uid",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj:
+            return self.readonly_fields + [
+                "uid",
+            ]
+        return self.readonly_fields
+
+    def get_list_display(self, request):
+        list_display = super().get_list_display(request)
+        if "uid" not in list_display:
+            return [
+                "uid",
+            ] + list_display
+        return list_display
+
+
+class ChatRoomMembershipInline(admin.TabularInline):
+    model = ChatRoomMembership
+    extra = 1
+    fields = [
+        "user",
+        "role",
+    ]
+    # readonly_fields = [
+    #     "user",
+    #     "role",
+    # ]
+
+
+class ChatRoomInvitationInline(admin.TabularInline):
+    model = ChatRoomInvitation
+    extra = 1
+    fields = ["receiver", "sender", "is_accepted", "invitation_status"]
+    # readonly_fields = ["receiver", "sender", "is_accepted", "invitation_status"]
 
 
 @admin.register(ChatRoom)
-class ChatRoomAdmin(admin.ModelAdmin):
-    list_display = (
+class ChatRoomAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
         "name",
         "group_name",
         "is_group_chat",
-        "admin",
+        "creator",
         "created_at",
         "updated_at",
-    )
-    list_filter = ("is_group_chat", "admin", "created_at", "updated_at")
-    search_fields = ("name", "group_name", "admin__username")
-    readonly_fields = ("uid", "created_at", "updated_at")
-    filter_horizontal = (
-        "members",
-    )  # If many-to-many relationships should use filter_horizontal
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "name",
+        "group_name",
+    ]
+    inlines = [ChatRoomMembershipInline, ChatRoomInvitationInline]
+    list_filter = [
+        "is_group_chat",
+        "status",
+    ]
+
+
+@admin.register(ChatRoomMembership)
+class ChatRoomMembershipAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "user",
+        "chat_room",
+        "role",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "user__username",
+        "chat_room__name",
+    ]
+    list_filter = [
+        "role",
+        "chat_room",
+        "status",
+    ]
+
+
+@admin.register(ChatRoomInvitation)
+class ChatRoomInvitationAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "chat_room",
+        "receiver",
+        "sender",
+        "is_accepted",
+        "invitation_status",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "chat_room__name",
+        "receiver__username",
+        "sender__username",
+    ]
+    list_filter = [
+        "invitation_status",
+        "is_accepted",
+        "status",
+    ]
+    # readonly_fields = [
+    #     "chat_room",
+    #     "receiver",
+    #     "sender",
+    #     "uid",
+    #     "created_at",
+    #     "updated_at",
+    #     "status",
+    # ]
 
 
 @admin.register(Attachment)
-class AttachmentAdmin(admin.ModelAdmin):
-    list_display = ("attachment", "emoji_description", "created_at", "updated_at")
-    list_filter = ("created_at", "updated_at")
-    search_fields = ("attachment", "emoji_description")
-    readonly_fields = ("uid", "created_at", "updated_at")
+class AttachmentAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "attachment",
+        "image",
+        "emoji_description",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "emoji_description",
+    ]
+    list_filter = [
+        "emoji_description",
+        "status",
+    ]
 
 
 @admin.register(Message)
-class MessageAdmin(admin.ModelAdmin):
-    list_display = ("content", "sender", "chat_room", "created_at", "updated_at")
-    list_filter = ("sender", "chat_room", "created_at", "updated_at")
-    search_fields = (
+class MessageAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "content",
+        "sender",
+        "chat_room",
+        "attachment",
+        "reply_to",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
         "content",
         "sender__username",
         "chat_room__name",
-        "chat_room__group_name",
-    )
-    readonly_fields = ("uid", "created_at", "updated_at")
-    raw_id_fields = (
+    ]
+    list_filter = [
+        "chat_room",
         "reply_to",
-        "attachment",
-    )  # Improves performance for large datasets
-    filter_horizontal = (
-        "read_by",
-    )  # If many-to-many relationships should use filter_horizontal
+        "status",
+    ]
+    # readonly_fields = [
+    #     "read_by",
+    #     "uid",
+    #     "created_at",
+    #     "updated_at",
+    #     "status",
+    # ]
 
 
 @admin.register(MessageReaction)
-class MessageReactionAdmin(admin.ModelAdmin):
-    list_display = ("user", "message", "reaction_type", "created_at", "updated_at")
-    list_filter = ("reaction_type", "created_at", "updated_at")
-    search_fields = ("user__username", "message__content", "reaction_type")
-    readonly_fields = ("uid", "created_at", "updated_at")
+class MessageReactionAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "user",
+        "message",
+        "reaction_type",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "user__username",
+        "message__content",
+    ]
+    list_filter = [
+        "reaction_type",
+        "status",
+    ]
+    # readonly_fields = [
+    #     "user",
+    #     "message",
+    #     "uid",
+    #     "created_at",
+    #     "updated_at",
+    #     "status",
+    # ]
