@@ -1,6 +1,7 @@
 from rest_framework_simplejwt.tokens import AccessToken
 
 from .models import ChatRoom
+from .choices import StatusChoices
 
 
 def get_or_create_private_chat(user1, user2):
@@ -9,11 +10,8 @@ def get_or_create_private_chat(user1, user2):
     room_name = generate_private_room_name(user1, user2)
 
     # Check if a room already exists with the same unique identifier
-    room, created = ChatRoom.objects.get_or_create(name=room_name, is_group_chat=False)
-
-    # If the room was just created, add the members
-    if created:
-        room.members.add(user1, user2)
+    #ChatRoom status will be active when user accepts the invitation
+    room, created = ChatRoom.objects.get_or_create(name=room_name, status=StatusChoices.INACTIVE)
 
     return room
 

@@ -138,7 +138,9 @@ class ChatRoomMembership(BaseModel):
             )
             # Check if adding this would exceed the admin limit
             if admin_count >= 3:
-                raise ValidationError("A group chat room can have a maximum of 3 admins.")
+                raise ValidationError(
+                    "A group chat room can have a maximum of 3 admins."
+                )
 
         # Only 2 members are allowed in a private chat room
         if not self.chat_room.is_group_chat:
@@ -211,7 +213,7 @@ class ChatRoomInvitation(BaseModel):
             raise ValidationError("Sender and receiver cannot be the same user.")
 
         # Only the creator/ of the chat room can send invitations
-        if not self.send_request_access():
+        if self.chat_room.is_group_chat and not self.send_request_access():
             raise ValidationError(
                 "You do not have permission to send invitation for this chat room."
             )
@@ -233,15 +235,22 @@ class ChatRoomInvitation(BaseModel):
         # Update is_accepted field based on invitation status
         if self.invitation_status == InvitationStatusChoices.ACCEPTED and self.pk:
             # Add chat memebership if invitation is accepted
-            room_member, created = ChatRoomMembership.objects.get_or_create(
-                user=self.receiver, chat_room=self.chat_room
-            )
+            for user in [self.sender, self.receiver]:
+                ChatRoomMembership.objects.get_or_create(
+                    user=user, chat_room=self.chat_room
+                )
+            # Update the chat room status for private chat
+            if not self.chat_room.status == StatusChoices.ACTIVE:
+                self.chat_room.status == StatusChoices.ACTIVE
+                self.chat_room.save_dirty_fields()
 
         super().save(*args, **kwargs)
 
-    def send_invitation(self, chat_room, receiver, sender):
-        """Send invitation to a user for a chat room."""
-        if chat_room.is_group_chat and not self.send_request_access(chat_room=chat_room, sender=sender):
+    def send_group_chat_invitation(self, chat_room, receiver, sender):
+        """Send invitation to a user for a group chat room."""
+        if chat_room.is_group_chat and not self.send_request_access(
+            chat_room=chat_room, sender=sender
+        ):
             return {"message": "You do not have permission to send invitation."}
 
         invitation, created = self.__class__.objects.get_or_create(
@@ -252,6 +261,70 @@ class ChatRoomInvitation(BaseModel):
             return {"message": "Invitation already exists.", "invitation": invitation}
 
         return {"message": "Invitation sent successfully.", "invitation": invitation}
+
+    def send_private_chat_invitation(self, receiver, sender):
+        """Send invitation to a user for a private chat room."""
+        from chat.utils import get_or_create_private_chat
+
+        # Get or create a private chat room
+        chat_room = get_or_create_private_chat(receiver, sender)
+
+        invitation, created = self.__class__.objects.get_or_create(
+            chat_room=chat_room, receiver=receiver, sender=sender
+        )
+
+        if not created:
+            return {"message": "Invitation already exists.", "invitation": invitation}
+
+        return {"message": "Invitation sent successfully.", "invitation": invitation}
+
+    def get_user_friend_list(self, user):
+        """Get the list of friends of a user."""
+        # Find invitations where the user is the sender and the invitation is accepted
+        sent_invitations = self.objects.filter(
+            sender=user,
+            invitation_status=InvitationStatusChoices.ACCEPTED,
+            chat_room__is_group_chat=False,
+        )
+        # Find invitations where the user is the receiver and the invitation is accepted
+        received_invitations = self.objects.filter(
+            receiver=user,
+            invitation_status=InvitationStatusChoices.ACCEPTED,
+            chat_room__is_group_chat=False,
+        )
+        # Find the user who blocked the current user
+        blocked_users = BlockList.objects.filter(
+            user=user, member_ship__isnull=True
+        ).values_list("blocked_by", flat=True)
+
+        # Collect friends from sent invitations and update the list with received invitations
+        friends = set(invitation.receiver for invitation in sent_invitations)
+        friends.update(invitation.sender for invitation in received_invitations)
+
+        # Remove blocked users from the list
+        friends.difference_update(User.objects.filter(id__in=blocked_users))
+
+        return list(friends)
+
+    def get_user_friend_request(self, user):
+        """Get the list of friend request of a user."""
+        # Find invitations where the user is the receiver and the invitation is pending
+        received_invitations = self.objects.filter(
+            receiver=user,
+            invitation_status=InvitationStatusChoices.PENDING,
+            chat_room__is_group_chat=False,
+        )
+        return received_invitations
+
+    def get_user_sent_request(self, user):
+        """Get the list of sent request of a user."""
+        # Find invitations where the user is the sender and the invitation is pending
+        sent_invitations = self.objects.filter(
+            sender=user,
+            invitation_status=InvitationStatusChoices.PENDING,
+            chat_room__is_group_chat=False,
+        )
+        return sent_invitations
 
 
 class Attachment(BaseModel):
