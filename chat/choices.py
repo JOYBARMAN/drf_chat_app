@@ -32,3 +32,11 @@ class InvitationStatusChoices(TextChoices):
     ACCEPTED = "ACCEPTED", "Accepted"
     REJECTED = "REJECTED", "Rejected"
     CANCELLED = "CANCELLED", "Cancelled"
+
+class MemberShipStatusChoices(TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    INACTIVE = "INACTIVE", "Inactive"
+    BLOCKED = "BLOCKED", "Blocked"
+    REMOVED = "REMOVED", "Removed"
+    BLOCKED_BY_ADMIN = "BLOCKED_BY_ADMIN", "Blocked by Admin"
+    BLOCKED_BY_SYSTEM = "BLOCKED_BY_SYSTEM", "Blocked by System"

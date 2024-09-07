@@ -7,6 +7,7 @@ from .models import (
     Attachment,
     Message,
     MessageReaction,
+    BlockList,
 )
 
 
@@ -52,7 +53,7 @@ class ChatRoomMembershipInline(admin.TabularInline):
 class ChatRoomInvitationInline(admin.TabularInline):
     model = ChatRoomInvitation
     extra = 1
-    fields = ["receiver", "sender", "is_accepted", "invitation_status"]
+    fields = ["chat_room","receiver", "sender", "invitation_status"]
     # readonly_fields = ["receiver", "sender", "is_accepted", "invitation_status"]
 
 
@@ -87,6 +88,7 @@ class ChatRoomMembershipAdmin(BaseModelAdmin):
         "user",
         "chat_room",
         "role",
+        "member_status",
         "created_at",
         "updated_at",
         "status",
@@ -100,6 +102,7 @@ class ChatRoomMembershipAdmin(BaseModelAdmin):
         "role",
         "chat_room",
         "status",
+        "member_status",
     ]
 
 
@@ -110,7 +113,6 @@ class ChatRoomInvitationAdmin(BaseModelAdmin):
         "chat_room",
         "receiver",
         "sender",
-        "is_accepted",
         "invitation_status",
         "created_at",
         "updated_at",
@@ -124,7 +126,6 @@ class ChatRoomInvitationAdmin(BaseModelAdmin):
     ]
     list_filter = [
         "invitation_status",
-        "is_accepted",
         "status",
     ]
     # readonly_fields = [
@@ -215,6 +216,34 @@ class MessageReactionAdmin(BaseModelAdmin):
     # readonly_fields = [
     #     "user",
     #     "message",
+    #     "uid",
+    #     "created_at",
+    #     "updated_at",
+    #     "status",
+    # ]
+
+@admin.register(BlockList)
+class BlockListAdmin(BaseModelAdmin):
+    list_display = [
+        "uid",
+        "user",
+        "member_ship",
+        "blocked_by",
+        "created_at",
+        "updated_at",
+        "status",
+    ]
+    search_fields = [
+        "uid",
+        "user__username",
+        "blocked_by__username",
+    ]
+    list_filter = [
+        "status",
+    ]
+    # readonly_fields = [
+    #     "user",
+    #     "blocked_by",
     #     "uid",
     #     "created_at",
     #     "updated_at",
