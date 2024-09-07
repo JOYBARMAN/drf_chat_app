@@ -3,7 +3,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 
-from chat.models import ChatRoom, Message
+from chat.models import ChatRoom, Message, ChatRoomMembership
 from chat.utils import generate_private_room_name
 
 from channels.generic.websocket import AsyncWebsocketConsumer
@@ -116,11 +116,14 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         """Get or create a private chat room between two users."""
         room_name = generate_private_room_name(sender, receiver)
         room, created = await database_sync_to_async(ChatRoom.objects.get_or_create)(
-            name=room_name, is_group_chat=False
+            name=room_name
         )
 
         if created:
-            room.members.add(sender, receiver)
+            for obj in [sender, receiver]:
+                room_membership, created = await database_sync_to_async(
+                    ChatRoomMembership.objects.get_or_create
+                )(chat_room=room, user=obj)
 
         return room
 

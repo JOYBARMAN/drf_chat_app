@@ -18,3 +18,25 @@ class ReactionChoices(TextChoices):
     CUTE = "CUTE", "Cute"
     LOVE = "LOVE", "Love"
     WOW = "WOW", "Wow"
+
+
+class UserRoleChoices(TextChoices):
+    ADMIN = "ADMIN", "Admin"
+    CO_ADMIN = "CO_ADMIN", "Co Admin"
+    MODERATOR = "MODERATOR", "Moderator"
+    MEMBER = "MEMBER", "Member"
+    VIEWER = "VIEWER", "Viewer"
+
+class InvitationStatusChoices(TextChoices):
+    PENDING = "PENDING", "Pending"
+    ACCEPTED = "ACCEPTED", "Accepted"
+    REJECTED = "REJECTED", "Rejected"
+    CANCELLED = "CANCELLED", "Cancelled"
+
+class MemberShipStatusChoices(TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    INACTIVE = "INACTIVE", "Inactive"
+    BLOCKED = "BLOCKED", "Blocked"
+    REMOVED = "REMOVED", "Removed"
+    BLOCKED_BY_ADMIN = "BLOCKED_BY_ADMIN", "Blocked by Admin"
+    BLOCKED_BY_SYSTEM = "BLOCKED_BY_SYSTEM", "Blocked by System"

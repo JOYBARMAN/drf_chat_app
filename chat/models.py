@@ -1,14 +1,23 @@
+from typing import Iterable
 import uuid
 
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
-from .choices import StatusChoices, ReactionChoices
+from .choices import (
+    StatusChoices,
+    ReactionChoices,
+    UserRoleChoices,
+    InvitationStatusChoices,
+    MemberShipStatusChoices,
+)
 
 from dirtyfields import DirtyFieldsMixin
 from versatileimagefield.fields import VersatileImageField
 
 User = get_user_model()
+ALLOWED_MEMBER_TO_SEND_INVITATION = ["ADMIN", "CO_ADMIN", "MODERATOR"]
 
 
 class BaseModel(DirtyFieldsMixin, models.Model):
@@ -36,9 +45,10 @@ class BaseModel(DirtyFieldsMixin, models.Model):
         help_text="Status of the instance, typically used for soft deletion.",
     )
 
-    def get_active_instance(self):
+    @classmethod
+    def get_active_instance(cls) -> Iterable:
         """Get active instance of the model."""
-        return self.__class__.objects.filter(status=StatusChoices.ACTIVE)
+        return cls.objects.filter(status=StatusChoices.ACTIVE)
 
     class Meta:
         abstract = True
@@ -66,23 +76,182 @@ class ChatRoom(BaseModel):
         default=False,
         help_text="Indicates whether the chat room is for group chat or private chat.",
     )
-
-    members = models.ManyToManyField(
-        User,
-        related_name="chat_rooms",
-        blank=True,
-        help_text="Users who are members of this chat room.",
-    )
-    admin = models.ForeignKey(
+    creator = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
-        related_name="admin_of_chat_rooms",
-        help_text="User who has administrative privileges for this chat room.",
+        blank=True,
+        related_name="creator_of_chat_rooms",
+        help_text="User who created this chat room.",
     )
 
     def __str__(self):
         return self.name or self.group_name
+
+
+class ChatRoomMembership(BaseModel):
+    """Model to store membership of users in chat rooms."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="chat_room_memberships",
+        help_text="User who is a member of the chat room.",
+    )
+    chat_room = models.ForeignKey(
+        ChatRoom,
+        on_delete=models.CASCADE,
+        related_name="memberships",
+        help_text="Chat room in which the user is a member.",
+    )
+    role = models.CharField(
+        max_length=20,
+        choices=UserRoleChoices.choices,
+        default=UserRoleChoices.MEMBER,
+        help_text="Role of the user in the chat room.",
+    )
+    member_status = models.CharField(
+        max_length=20,
+        choices=MemberShipStatusChoices.choices,
+        default=MemberShipStatusChoices.ACTIVE,
+        help_text="Status of the member in the chat room.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "chat_room"], name="unique_user_chat_room_membership"
+            )
+        ]
+
+    def clean(self) -> None:
+        super().clean()
+
+        # Only 3 admins are allowed in a chat room
+        if self.role == UserRoleChoices.ADMIN and self.chat_room.is_group_chat:
+            # Count the current number of admins in the chat room excluding the current instance
+            admin_count = (
+                ChatRoomMembership.get_active_instance()
+                .filter(chat_room=self.chat_room, role=UserRoleChoices.ADMIN)
+                .distinct()
+                .count()
+            )
+            # Check if adding this would exceed the admin limit
+            if admin_count >= 3:
+                raise ValidationError("A group chat room can have a maximum of 3 admins.")
+
+        # Only 2 members are allowed in a private chat room
+        if not self.chat_room.is_group_chat:
+            user_count = (
+                ChatRoomMembership.get_active_instance()
+                .filter(chat_room=self.chat_room)
+                .distinct()
+                .count()
+            )
+            if user_count >= 2:
+                raise ValidationError(
+                    "A private chat room can have a maximum of 2 members."
+                )
+
+    def save(self, *args, **kwargs):
+        # Call clean to perform validations
+        self.clean()
+
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.user} in {self.chat_room}"
+
+
+class ChatRoomInvitation(BaseModel):
+    """Model to store chat room invitations."""
+
+    chat_room = models.ForeignKey(
+        ChatRoom,
+        on_delete=models.CASCADE,
+        related_name="invitations",
+        help_text="Chat room for which the invitation is sent.",
+    )
+    receiver = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="chat_room_invitations",
+        help_text="User who is invited to the chat room.",
+    )
+    sender = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="chat_room_invitations_sent",
+        help_text="User who sent the invitation to the chat room.",
+    )
+    invitation_status = models.CharField(
+        max_length=20,
+        choices=InvitationStatusChoices.choices,
+        default=InvitationStatusChoices.PENDING,
+        help_text="Status of the invitation.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chat_room", "receiver", "sender"],
+                name="unique_chat_room_invitation",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.receiver.username} invited to {self.chat_room.name}"
+
+    def clean(self):
+        """Custom validation for the ChatRoomInvitation model."""
+        super().clean()
+
+        # Sender and receiver cannot be the same user
+        if self.sender == self.receiver:
+            raise ValidationError("Sender and receiver cannot be the same user.")
+
+        # Only the creator/ of the chat room can send invitations
+        if not self.send_request_access():
+            raise ValidationError(
+                "You do not have permission to send invitation for this chat room."
+            )
+
+    def send_request_access(self, sender=None, chat_room=None):
+        # Check if the sender has the permission to send invitation for the group chat
+        has_access = ChatRoomMembership.objects.filter(
+            user=sender if sender else self.sender,
+            chat_room=chat_room if chat_room else self.chat_room,
+            role__in=ALLOWED_MEMBER_TO_SEND_INVITATION,
+        ).exists()
+
+        return has_access
+
+    def save(self, *args, **kwargs):
+        # Call clean to perform validations
+        self.clean()
+
+        # Update is_accepted field based on invitation status
+        if self.invitation_status == InvitationStatusChoices.ACCEPTED and self.pk:
+            # Add chat memebership if invitation is accepted
+            room_member, created = ChatRoomMembership.objects.get_or_create(
+                user=self.receiver, chat_room=self.chat_room
+            )
+
+        super().save(*args, **kwargs)
+
+    def send_invitation(self, chat_room, receiver, sender):
+        """Send invitation to a user for a chat room."""
+        if chat_room.is_group_chat and not self.send_request_access(chat_room=chat_room, sender=sender):
+            return {"message": "You do not have permission to send invitation."}
+
+        invitation, created = self.__class__.objects.get_or_create(
+            chat_room=chat_room, receiver=receiver, sender=sender
+        )
+
+        if not created:
+            return {"message": "Invitation already exists.", "invitation": invitation}
+
+        return {"message": "Invitation sent successfully.", "invitation": invitation}
 
 
 class Attachment(BaseModel):
@@ -189,3 +358,53 @@ class MessageReaction(BaseModel):
 
     def __str__(self):
         return f"{self.user} reacted {self.reaction_type} on {self.message}"
+
+
+class BlockList(BaseModel):
+    """Model to store blocked users."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="blocked_users",
+        help_text="User who is blocked.",
+    )
+    member_ship = models.ForeignKey(
+        ChatRoomMembership,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="blocked_users",
+        help_text="User who is blocked in the chat room.",
+    )
+    blocked_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="blocked_by_users",
+        help_text="User who blocked the user.",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["user", "blocked_by"], name="unique_blocked_user"
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user} is blocked by {self.blocked_by}"
+
+    def clean(self) -> None:
+        super().clean()
+
+        # Check if the user not try to block himself
+        if self.user == self.blocked_by:
+            raise ValidationError("You cannot block yourself.")
+
+    def save(self, *args, **kwargs):
+        # Call clean to perform validations
+        self.clean()
+
+        super().save(*args, **kwargs)
