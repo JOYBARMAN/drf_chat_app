@@ -1,57 +1,23 @@
-from typing import Iterable
-import uuid
-
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
-from .choices import (
-    StatusChoices,
+from chat.choices import (
     ReactionChoices,
     UserRoleChoices,
     InvitationStatusChoices,
     MemberShipStatusChoices,
 )
 
-from dirtyfields import DirtyFieldsMixin
+from shared.choices import StatusChoices
+from shared.base_model import BaseModel
+
+
 from versatileimagefield.fields import VersatileImageField
 
 User = get_user_model()
 ALLOWED_MEMBER_TO_SEND_INVITATION = ["ADMIN", "CO_ADMIN", "MODERATOR"]
 
-
-class BaseModel(DirtyFieldsMixin, models.Model):
-    """Base class for all other models."""
-
-    uid = models.UUIDField(
-        default=uuid.uuid4,
-        editable=False,
-        db_index=True,
-        unique=True,
-        help_text="Unique identifier for this model instance.",
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        help_text="Timestamp indicating when the instance was created.",
-    )
-    updated_at = models.DateTimeField(
-        auto_now=True,
-        help_text="Timestamp indicating when the instance was last updated.",
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=StatusChoices.choices,
-        default=StatusChoices.ACTIVE,
-        help_text="Status of the instance, typically used for soft deletion.",
-    )
-
-    @classmethod
-    def get_active_instance(cls) -> Iterable:
-        """Get active instance of the model."""
-        return cls.objects.filter(status=StatusChoices.ACTIVE)
-
-    class Meta:
-        abstract = True
 
 
 class ChatRoom(BaseModel):
@@ -278,24 +244,33 @@ class ChatRoomInvitation(BaseModel):
 
         return {"message": "Invitation sent successfully.", "invitation": invitation}
 
-    def get_user_friend_list(self, user):
-        """Get the list of friends of a user."""
-        # Find invitations where the user is the sender and the invitation is accepted
-        sent_invitations = self.objects.filter(
+    @classmethod
+    def get_user_accepted_sent_invitation(self, user):
+        """Get the list of accepted sent invitation of a user."""
+        return self.objects.filter(
             sender=user,
             invitation_status=InvitationStatusChoices.ACCEPTED,
             chat_room__is_group_chat=False,
-        )
-        # Find invitations where the user is the receiver and the invitation is accepted
-        received_invitations = self.objects.filter(
+        ).select_related("receiver")
+
+    @classmethod
+    def get_user_accepted_received_invitation(self, user):
+        """Get the list of accepted received invitation of a user."""
+        return self.objects.filter(
             receiver=user,
             invitation_status=InvitationStatusChoices.ACCEPTED,
             chat_room__is_group_chat=False,
-        )
+        ).select_related("sender")
+
+    @classmethod
+    def get_user_friend_list(self, user):
+        """Get the list of friends of a user."""
+        # Get the list of accepted sent and received invitations
+        sent_invitations = self.get_user_accepted_sent_invitation(user)
+        received_invitations = self.get_user_accepted_received_invitation(user)
+
         # Find the user who blocked the current user
-        blocked_users = BlockList.objects.filter(
-            user=user, member_ship__isnull=True
-        ).values_list("blocked_by", flat=True)
+        blocked_users = BlockList().get_user_blocked_by_list(user)
 
         # Collect friends from sent invitations and update the list with received invitations
         friends = set(invitation.receiver for invitation in sent_invitations)
@@ -305,6 +280,27 @@ class ChatRoomInvitation(BaseModel):
         friends.difference_update(User.objects.filter(id__in=blocked_users))
 
         return list(friends)
+
+    @classmethod
+    def get_user_add_friend_list(self, user):
+        """Get the list of users who can be added as friends by a user."""
+
+        # Get the list of accepted sent and received invitations
+        sent_invitations = [
+            ele.receiver.id for ele in self.get_user_accepted_sent_invitation(user)
+        ]
+        received_invitations = [
+            ele.sender.id for ele in self.get_user_accepted_received_invitation(user)
+        ]
+
+        # Find the user who blocked the current user
+        blocked_users = [ele for ele in BlockList().get_user_blocked_by_list(user)]
+        # Arrange the exclude users list for current user
+        exclude_users = set(
+            sent_invitations + received_invitations + blocked_users + [user.id]
+        )
+
+        return User.objects.exclude(id__in=exclude_users)
 
     def get_user_friend_request(self, user):
         """Get the list of friend request of a user."""
@@ -481,3 +477,17 @@ class BlockList(BaseModel):
         self.clean()
 
         super().save(*args, **kwargs)
+
+    @classmethod
+    def get_user_blocked_list(self, user):
+        """Get the list of blocked users by a user."""
+        return self.objects.filter(
+            blocked_by=user, member_ship__isnull=True
+        ).select_related("user")
+
+    @classmethod
+    def get_user_blocked_by_list(self, user):
+        """Get the list of user blocked by list"""
+        return self.objects.filter(user=user, member_ship__isnull=True).values_list(
+            "blocked_by", flat=True
+        )
