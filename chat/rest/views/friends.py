@@ -1,8 +1,8 @@
-from rest_framework.generics import ListAPIView, ListCreateAPIView
+from rest_framework.generics import ListAPIView
 from rest_framework.permissions import IsAuthenticated
 
-from chat.rest.serializers.friends import UserSerializer, BlockListSerializer
-from chat.models import ChatRoomInvitation, BlockList
+from chat.rest.serializers.friends import UserSerializer
+from chat.models import ChatRoomInvitation
 
 
 class AddFriendsView(ListAPIView):
@@ -23,13 +23,3 @@ class FriendListView(ListAPIView):
 
     def get_queryset(self):
         return ChatRoomInvitation().get_user_friend_list(user=self.request.user)
-
-
-class BlockListFriend(ListCreateAPIView):
-    """Blocked list friend for the user"""
-
-    serializer_class = BlockListSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return BlockList().get_user_blocked_list(user=self.request.user)
