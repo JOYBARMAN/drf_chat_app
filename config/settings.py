@@ -48,10 +48,13 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
 ]
 LOCAL_APPS = [
+    "core.apps.CoreConfig",
     "chat.apps.ChatConfig",
 ]
 
 INSTALLED_APPS = CHANNELS_APPS + DEFAULT_APPS + THIRD_PARTY_APPS + LOCAL_APPS
+
+AUTH_USER_MODEL = "core.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -140,6 +143,9 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 
+
+
+
 APPEND_SLASH = False
 
 # Setups for Django Channels layers
@@ -156,7 +162,9 @@ CHANNEL_LAYERS = {
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-    )
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 30,
 }
 
 # JWT setting
