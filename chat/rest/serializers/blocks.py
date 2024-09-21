@@ -28,11 +28,9 @@ class BlockListSerializer(serializers.ModelSerializer):
 
     def validate_user_uid(self, value):
         """Check if the user exists"""
-        user = User.objects.filter(uid=value).first()
-        if not user:
+        self.user = User.objects.filter(uid=value).first()
+        if not self.user:
             raise serializers.ValidationError("User does not exist.")
-
-        self.user = user
 
         return value
 

@@ -46,6 +46,7 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "versatileimagefield",
     "rest_framework_simplejwt",
+    "silk",
 ]
 LOCAL_APPS = [
     "core.apps.CoreConfig",
@@ -64,6 +65,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "silk.middleware.SilkyMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -143,9 +145,6 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 
-
-
-
 APPEND_SLASH = False
 
 # Setups for Django Channels layers
@@ -163,8 +162,8 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 30,
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 30,
 }
 
 # JWT setting

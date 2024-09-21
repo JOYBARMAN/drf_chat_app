@@ -11,6 +11,9 @@ urlpatterns = [
     path('api/v1', include('chat.rest.urls')),
 ]
 
+# Add silk profiler urls
+urlpatterns += [path('silk/', include('silk.urls', namespace='silk'))]
+
 # Serve media files during development
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

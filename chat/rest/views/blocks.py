@@ -27,6 +27,7 @@ class BlockRoomMember(ListCreateAPIView):
             member_ship__chat_room__uid=room_uid
         ).select_related(
             "user",
+            "blocked_by",
             "member_ship__user",
             "member_ship__chat_room__creator",
         )
