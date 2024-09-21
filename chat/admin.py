@@ -89,6 +89,7 @@ class ChatRoomMembershipAdmin(BaseModelAdmin):
         "chat_room",
         "role",
         "member_status",
+        "has_write_access",
         "created_at",
         "updated_at",
         "status",

@@ -1,17 +1,21 @@
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import NotFound
 
 from chat.models import Message, ChatRoom
-from chat.permissions import IsChatRoomMember
+from chat.permissions import IsChatRoomActiveMember, HasWriteAccessToChatRoom
 from chat.rest.serializers.messages import MessageSerializer
 
 
 class MessageList(ListCreateAPIView):
     """Message list view"""
 
-    permission_classes = [IsAuthenticated & IsChatRoomMember]
     serializer_class = MessageSerializer
+
+    def get_permissions(self):
+        if self.request.method in SAFE_METHODS:
+            return [IsChatRoomActiveMember()]
+        return [HasWriteAccessToChatRoom()]
 
     def get_queryset(self):
         room_uid = self.kwargs.get("chat_room_uid")
@@ -21,8 +25,10 @@ class MessageList(ListCreateAPIView):
         except ChatRoom.DoesNotExist:
             raise NotFound("Chat room not found with the given uid")
 
-        return (
-            Message().get_active_instance().filter(chat_room=chat_room)
+        messages = (
+            Message()
+            .get_active_instance()
+            .filter(chat_room=chat_room)
             .select_related(
                 "sender",
                 "attachment",
@@ -35,6 +41,13 @@ class MessageList(ListCreateAPIView):
             )
             .order_by("-created_at")
         )
+
+        # Update the read_by field
+        for message in messages:
+            if self.request.user not in message.read_by.all():
+                message.read_by.add(self.request.user)
+
+        return messages
 
 
 class MessageDetail(RetrieveUpdateDestroyAPIView):

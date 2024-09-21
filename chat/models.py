@@ -82,6 +82,10 @@ class ChatRoomMembership(BaseModel):
         default=MemberShipStatusChoices.ACTIVE,
         help_text="Status of the member in the chat room.",
     )
+    has_write_access = models.BooleanField(
+        default=True,
+        help_text="Indicates whether the user has write access in the chat room.",
+    )
 
     class Meta:
         constraints = [
@@ -109,9 +113,9 @@ class ChatRoomMembership(BaseModel):
                 )
 
         # Only 2 members are allowed in a private chat room
-        if not self.chat_room.is_group_chat:
+        if not self.chat_room.is_group_chat and not self.pk:
             user_count = (
-                ChatRoomMembership.get_active_instance()
+                self.__class__
                 .filter(chat_room=self.chat_room)
                 .distinct()
                 .count()
