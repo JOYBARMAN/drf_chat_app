@@ -346,7 +346,7 @@ class Attachment(BaseModel):
     )
 
     def __str__(self):
-        return self.attachment.name if self.attachment else "No Attachment"
+        return f"Uid: {self.uid}"
 
 
 class Message(BaseModel):

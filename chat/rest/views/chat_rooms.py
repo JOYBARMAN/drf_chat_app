@@ -1,6 +1,6 @@
 from django.db.models import OuterRef, Subquery
 
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView
 from rest_framework.permissions import IsAuthenticated
 
 from chat.models import ChatRoomMembership, Message
@@ -39,3 +39,8 @@ class ChatRoomList(ListAPIView):
                 last_message_content=Subquery(last_message_content_subquery),
             )
         )
+
+
+class ChatRoomDetail(RetrieveAPIView):
+    """Chat room detail view"""
+    pass
