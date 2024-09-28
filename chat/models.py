@@ -237,7 +237,7 @@ class ChatRoomInvitation(BaseModel):
         # Get or create a private chat room
         chat_room = get_or_create_private_chat(receiver, sender)
 
-        invitation, created = self.__class__.objects.get_or_create(
+        invitation, created = self.objects.get_or_create(
             chat_room=chat_room, receiver=receiver, sender=sender
         )
 
@@ -304,14 +304,15 @@ class ChatRoomInvitation(BaseModel):
 
         return User.objects.exclude(id__in=exclude_users)
 
+    @classmethod
     def get_user_friend_request(self, user):
         """Get the list of friend request of a user."""
         # Find invitations where the user is the receiver and the invitation is pending
         received_invitations = self.objects.filter(
             receiver=user,
             invitation_status=InvitationStatusChoices.PENDING,
-            chat_room__is_group_chat=False,
-        )
+        ).select_related("sender", "chat_room__creator", "receiver")
+
         return received_invitations
 
     def get_user_sent_request(self, user):

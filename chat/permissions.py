@@ -49,3 +49,30 @@ class IsMemberHasInvitationAccess(IsAuthenticated):
         return ChatRoomInvitation().send_request_access(
             chat_room=chat_room, sender=request.user
         )
+
+
+class HasUpdateAccessToRoomMembership(IsAuthenticated):
+    """Check if the user has update access to the chat room membership"""
+
+    def has_object_permission(self, request, view, obj):
+        if not super().has_permission(request, view):
+            return False
+
+        chat_room_uid = view.kwargs.get("chat_room_uid")
+        chat_room = ChatRoom.objects.filter(uid=chat_room_uid).first()
+
+        if not chat_room:
+            return False
+
+        room_member = ChatRoomMembership.objects.filter(
+            user=request.user, chat_room=chat_room
+        ).first()
+
+        if (
+            not room_member
+            or obj.user == request.user
+            or (obj.role == "ADMIN" and room_member.role != "ADMIN")
+        ):
+            return False
+
+        return room_member.role in ["ADMIN", "CO_ADMIN"]

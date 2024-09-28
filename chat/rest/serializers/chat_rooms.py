@@ -79,7 +79,12 @@ class ChatRoomMembershipSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = fields
+        read_only_fields = fields.copy()
+        read_only_fields.remove("role")
+        read_only_fields.remove("member_status")
+
+    def update(self, instance, validated_data):
+        return super().update(instance, validated_data)
 
 
 class ChatRoomMembershipListSerializer(ChatRoomMembershipSerializer):
@@ -123,7 +128,48 @@ class GroupChatMemberInviteSerializer(serializers.Serializer):
                 )
             except Exception as e:
                 error_message = str(e).strip("[]'")
-                raise serializers.ValidationError({"detail":error_message})
+                raise serializers.ValidationError({"detail": error_message})
 
         validated_data["message"] = "Invitation sent successfully"
         return validated_data
+
+
+class ChatRoomInvitationSerializer(serializers.ModelSerializer):
+    sender = UserSerializer(read_only=True)
+    receiver = UserSerializer(read_only=True)
+    chat_room = ChatRoomSerializer(read_only=True)
+    action_uid = serializers.UUIDField(write_only=True)
+
+    class Meta:
+        model = ChatRoomInvitation
+        fields = [
+            "uid",
+            "action_uid",
+            "sender",
+            "receiver",
+            "chat_room",
+            "invitation_status",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = fields.copy()
+        read_only_fields.remove("invitation_status")
+
+    def create(self, validated_data):
+        action_uid = validated_data.get("action_uid")
+        user = self.context["request"].user
+
+        # Get the invitation instance
+        invitation = ChatRoomInvitation.objects.filter(
+            uid=action_uid, receiver=user
+        ).first()
+
+        if not invitation:
+            raise serializers.ValidationError(
+                "Invitation not found with the given action_uid"
+            )
+
+        invitation.invitation_status = validated_data.get("invitation_status")
+        invitation.save_dirty_fields()
+
+        return invitation

@@ -1,6 +1,11 @@
 from django.db.models import OuterRef, Subquery
 
-from rest_framework.generics import ListAPIView, RetrieveAPIView, ListCreateAPIView
+from rest_framework.generics import (
+    ListAPIView,
+    RetrieveAPIView,
+    ListCreateAPIView,
+    RetrieveUpdateAPIView,
+)
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound
 
@@ -11,7 +16,7 @@ from chat.rest.serializers.chat_rooms import (
     ChatRoomMembershipSerializer,
     GroupChatMemberInviteSerializer,
 )
-from chat.permissions import IsChatRoomActiveMember, IsMemberHasInvitationAccess
+from chat.permissions import IsChatRoomActiveMember, IsMemberHasInvitationAccess, HasUpdateAccessToRoomMembership
 
 
 class ChatRoomList(ListAPIView):
@@ -97,3 +102,31 @@ class GroupChatMember(ListCreateAPIView):
         return ChatRoomMembership.objects.filter(chat_room=chat_room).select_related(
             "user", "chat_room__creator"
         )
+
+
+class GroupChatMemberDetail(RetrieveUpdateAPIView):
+    """Group chat member detail view"""
+
+    serializer_class = ChatRoomMembershipSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsChatRoomActiveMember()]
+        return [HasUpdateAccessToRoomMembership()]
+        # return [IsAuthenticated()]
+
+    def get_object(self):
+        try:
+            chat_room = ChatRoom.objects.get(uid=self.kwargs.get("chat_room_uid"))
+        except ChatRoom.DoesNotExist:
+            raise NotFound("Chat room not found with the given uid")
+
+        if not chat_room.is_group_chat:
+            raise NotFound("Chat room is not a group chat")
+
+        try:
+            return ChatRoomMembership.objects.get(
+                uid=self.kwargs.get("member_ship_uid")
+            )
+        except ChatRoomMembership.DoesNotExist:
+            raise NotFound("Chat room member not found with the given uid")
