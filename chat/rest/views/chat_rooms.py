@@ -1,12 +1,17 @@
 from django.db.models import OuterRef, Subquery
 
-from rest_framework.generics import ListAPIView, RetrieveAPIView
+from rest_framework.generics import ListAPIView, RetrieveAPIView, ListCreateAPIView
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import NotFound
 
-from chat.models import ChatRoomMembership, Message
+from chat.models import ChatRoomMembership, Message, ChatRoom
 from chat.rest.serializers.chat_rooms import (
     ChatRoomMembershipListSerializer,
+    ChatRoomSerializer,
+    ChatRoomMembershipSerializer,
+    GroupChatMemberInviteSerializer,
 )
+from chat.permissions import IsChatRoomActiveMember, IsMemberHasInvitationAccess
 
 
 class ChatRoomList(ListAPIView):
@@ -43,4 +48,52 @@ class ChatRoomList(ListAPIView):
 
 class ChatRoomDetail(RetrieveAPIView):
     """Chat room detail view"""
+
     pass
+
+
+class GroupChatList(ListCreateAPIView):
+    """Group chat create view"""
+
+    serializer_class = ChatRoomSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        member_ship = ChatRoomMembership.objects.filter(
+            user=self.request.user, chat_room__is_group_chat=True
+        ).select_related("chat_room__creator")
+
+        return [membership.chat_room for membership in member_ship]
+
+
+class GroupChatDetail(RetrieveAPIView):
+    """Group chat detail view"""
+
+    pass
+
+
+class GroupChatMember(ListCreateAPIView):
+    """Group chat members list view"""
+
+    def get_serializer_class(self):
+        if self.request.method == "GET":
+            return ChatRoomMembershipSerializer
+        return GroupChatMemberInviteSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsChatRoomActiveMember()]
+        return [IsMemberHasInvitationAccess()]
+
+    def get_queryset(self):
+        try:
+            chat_room = ChatRoom.objects.get(uid=self.kwargs.get("chat_room_uid"))
+        except ChatRoom.DoesNotExist:
+            raise NotFound("Chat room not found with the given uid")
+
+        if not chat_room.is_group_chat:
+            raise NotFound("Chat room is not a group chat")
+
+        return ChatRoomMembership.objects.filter(chat_room=chat_room).select_related(
+            "user", "chat_room__creator"
+        )

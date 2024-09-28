@@ -223,19 +223,12 @@ class ChatRoomInvitation(BaseModel):
 
     def send_group_chat_invitation(self, chat_room, receiver, sender):
         """Send invitation to a user for a group chat room."""
-        if chat_room.is_group_chat and not self.send_request_access(
-            chat_room=chat_room, sender=sender
-        ):
-            return {"message": "You do not have permission to send invitation."}
 
         invitation, created = self.__class__.objects.get_or_create(
             chat_room=chat_room, receiver=receiver, sender=sender
         )
 
-        if not created:
-            return {"message": "Invitation already exists.", "invitation": invitation}
-
-        return {"message": "Invitation sent successfully.", "invitation": invitation}
+        return invitation
 
     def send_private_chat_invitation(self, receiver, sender):
         """Send invitation to a user for a private chat room."""

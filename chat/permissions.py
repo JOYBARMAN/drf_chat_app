@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 
-from chat.models import ChatRoomMembership
+from chat.models import ChatRoomMembership, ChatRoom, ChatRoomInvitation
 
 
 class IsChatRoomActiveMember(IsAuthenticated):
@@ -34,3 +34,18 @@ class HasWriteAccessToChatRoom(IsAuthenticated):
             return member_ship.has_write_access
 
         return False
+
+
+class IsMemberHasInvitationAccess(IsAuthenticated):
+    """Check if the user has invitation access to the chat room"""
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+
+        chat_room_uid = view.kwargs.get("chat_room_uid")
+        chat_room = ChatRoom.objects.filter(uid=chat_room_uid).first()
+
+        return ChatRoomInvitation().send_request_access(
+            chat_room=chat_room, sender=request.user
+        )
