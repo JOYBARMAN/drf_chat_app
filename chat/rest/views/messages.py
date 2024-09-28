@@ -6,8 +6,11 @@ from chat.models import Message, ChatRoom
 from chat.permissions import IsChatRoomActiveMember, HasWriteAccessToChatRoom
 from chat.rest.serializers.messages import MessageSerializer
 
+from shared.services import CachedQuerysetMixin
+from shared.cache_key import get_chat_room_messages_cache_key
 
-class MessageList(ListCreateAPIView):
+
+class MessageList(CachedQuerysetMixin, ListCreateAPIView):
     """Message list view"""
 
     serializer_class = MessageSerializer
@@ -17,8 +20,13 @@ class MessageList(ListCreateAPIView):
             return [IsChatRoomActiveMember()]
         return [HasWriteAccessToChatRoom()]
 
-    def get_queryset(self):
+    def get_cache_key(self):
         room_uid = self.kwargs.get("chat_room_uid")
+        return get_chat_room_messages_cache_key(room_uid)
+
+    def fetch_queryset(self):
+        room_uid = self.kwargs.get("chat_room_uid")
+
         # Check if the chat room exists
         try:
             chat_room = ChatRoom.objects.get(uid=room_uid)
@@ -48,7 +56,6 @@ class MessageList(ListCreateAPIView):
                 message.read_by.add(self.request.user)
 
         return messages
-
 
 class MessageDetail(RetrieveUpdateDestroyAPIView):
     pass

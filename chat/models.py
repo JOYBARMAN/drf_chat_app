@@ -11,13 +11,14 @@ from chat.choices import (
 
 from shared.choices import StatusChoices
 from shared.base_model import BaseModel
+from shared.services import CacheMethod
+from shared.cache_key import get_user_chat_room_cache_key
 
 
 from versatileimagefield.fields import VersatileImageField
 
 User = get_user_model()
 ALLOWED_MEMBER_TO_SEND_INVITATION = ["ADMIN", "CO_ADMIN", "MODERATOR"]
-
 
 
 class ChatRoom(BaseModel):
@@ -115,8 +116,7 @@ class ChatRoomMembership(BaseModel):
         # Only 2 members are allowed in a private chat room
         if not self.chat_room.is_group_chat and not self.pk:
             user_count = (
-                self.__class__
-                .filter(chat_room=self.chat_room)
+                self.__class__.objects.filter(chat_room=self.chat_room)
                 .distinct()
                 .count()
             )
@@ -128,6 +128,11 @@ class ChatRoomMembership(BaseModel):
     def save(self, *args, **kwargs):
         # Call clean to perform validations
         self.clean()
+
+        # Remove cache for the user chat room list
+        if self.pk:
+            cache_key = get_user_chat_room_cache_key(user_id=self.user.id)
+            CacheMethod().clear_cache(cache_key)
 
         super().save(*args, **kwargs)
 
