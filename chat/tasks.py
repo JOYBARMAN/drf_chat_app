@@ -1,20 +1,24 @@
 from chat.models import Message
 from celery import shared_task
 from chat.rest.serializers.messages import MessageSerializer
+from chat.utils import update_message_cache
 
 
 @shared_task
-def update_message_read_by(message_ids, user_id):
+def update_message_read_by(message_ids: list, user_id: int, room_uid: str):
     from django.contrib.auth import get_user_model
     from chat.models import Message
 
-    User = get_user_model()
+    # Fetch the user
+    user = get_user_model().objects.get(id=user_id)
 
     # Fetch the user and messages
-    user = User.objects.get(id=user_id)
-    messages = Message.objects.filter(id__in=message_ids)
+    messages = Message.objects.filter(id__in=message_ids).exclude(read_by=user)
 
     # Update the read_by field for each message
     for message in messages:
-        if user not in message.read_by.all():
-            message.read_by.add(user)
+        message.read_by.add(user)
+
+    # Update the cache
+    update_message_cache(room_uid)
+    return

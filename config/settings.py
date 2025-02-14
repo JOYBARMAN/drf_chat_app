@@ -48,6 +48,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt",
     "celery",
     "silk",
+    "drf_yasg",
 ]
 LOCAL_APPS = [
     "core.apps.CoreConfig",
@@ -175,13 +176,13 @@ SIMPLE_JWT = {
 
 
 # set the celery broker url
-CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_BROKER_URL = "redis://localhost:6379/0"
 
 # set the celery result backend
-CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
 
 # set the celery timezone
-CELERY_TIMEZONE = 'Asia/Dhaka'
+CELERY_TIMEZONE = "Asia/Dhaka"
 
 
 CACHE_TTL = 60 * 15  # 15 minutes
@@ -196,3 +197,6 @@ CACHES = {
         "TIMEOUT": CACHE_TTL,  # Default timeout
     }
 }
+
+# Swagger settings
+ENABLE_SWAGGER = True

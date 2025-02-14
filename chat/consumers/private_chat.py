@@ -4,7 +4,8 @@ import logging
 from django.contrib.auth import get_user_model
 
 from chat.models import ChatRoom, Message, ChatRoomMembership
-from chat.utils import generate_private_room_name
+from chat.utils import generate_private_room_name, update_message_cache
+from chat.rest.serializers.messages import MessageSerializer
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
@@ -63,33 +64,29 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             await self.close()
             return
 
-        # Add sender, receiver, and room_id to the data
-        data["sender"] = self.sender.username
-        data["receiver"] = self.receiver.username
-        data["room"] = self.room.name
-
         # Create message instance
         self.message_instance = await database_sync_to_async(Message.objects.create)(
             content=data["message"], sender=self.sender, chat_room=self.room
         )
-        data["message_uid"] = str(self.message_instance.uid)
 
         # Update real time message read by funtionality
         if self.sender.id in CONNECTED_USERS and self.receiver.id in CONNECTED_USERS:
             await database_sync_to_async(self.message_instance.read_by.add)(
                 self.sender, self.receiver
             )
-            data["read_by"] = [self.sender.username, self.receiver.username]
         else:
             await database_sync_to_async(self.message_instance.read_by.add)(self.sender)
-            data["read_by"] = [self.sender.username]
+
+        # Update the message cache
+        queryset=await database_sync_to_async(update_message_cache)(self.room.uid)
+        serializer = MessageSerializer(queryset[0])
 
         # Broadcast data to the group
         await self.channel_layer.group_send(
             self.group_name,
             {
                 "type": "chat_message",
-                "message": json.dumps(data),
+                "message": json.dumps(serializer.data),
             },
         )
 
@@ -120,6 +117,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         )
 
         if created:
+            # Add sender and receiver to the room
             for obj in [sender, receiver]:
                 room_membership, created = await database_sync_to_async(
                     ChatRoomMembership.objects.get_or_create

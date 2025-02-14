@@ -1,4 +1,5 @@
 from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
+from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 
@@ -37,6 +38,8 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     username = models.CharField(max_length=50, unique=True, db_index=True)
+    password = models.CharField(max_length=128)
+    new_password = models.CharField(max_length=128, blank=True)
     email = models.EmailField(unique=True, db_index=True)
     first_name = models.CharField(max_length=50, blank=True)
     last_name = models.CharField(max_length=50, blank=True)
@@ -51,3 +54,12 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
 
     def __str__(self):
         return f"uid:{self.uid} {self.email}"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.password = make_password(self.password)
+        if self.new_password:
+            self.password = make_password(self.new_password)
+            self.new_password = ""
+
+        super().save(*args, **kwargs)

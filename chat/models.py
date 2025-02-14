@@ -1,4 +1,5 @@
 from django.db import models
+from django.core.cache import cache
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
@@ -12,8 +13,10 @@ from chat.choices import (
 from shared.choices import StatusChoices
 from shared.base_model import BaseModel
 from shared.services import CacheMethod
-from shared.cache_key import get_user_chat_room_cache_key
-
+from shared.cache_key import (
+    get_user_chat_room_cache_key,
+    get_chat_room_messages_cache_key,
+)
 
 from versatileimagefield.fields import VersatileImageField
 
@@ -397,6 +400,13 @@ class Message(BaseModel):
 
     def __str__(self):
         return self.content[:50] if self.content else "No Content"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update the cache
+        from chat.utils import update_message_cache
+        update_message_cache(self.chat_room.uid)
+
 
 
 class MessageReaction(BaseModel):

@@ -1,7 +1,11 @@
+from django.core.cache import cache
+
 from rest_framework_simplejwt.tokens import AccessToken
 
-from .models import ChatRoom
+from .models import ChatRoom, Message
 from .choices import StatusChoices
+
+from shared.cache_key import get_chat_room_messages_cache_key
 
 
 def get_or_create_private_chat(user1, user2):
@@ -10,8 +14,10 @@ def get_or_create_private_chat(user1, user2):
     room_name = generate_private_room_name(user1, user2)
 
     # Check if a room already exists with the same unique identifier
-    #ChatRoom status will be active when user accepts the invitation
-    room, created = ChatRoom.objects.get_or_create(name=room_name, status=StatusChoices.INACTIVE)
+    # ChatRoom status will be active when user accepts the invitation
+    room, created = ChatRoom.objects.get_or_create(
+        name=room_name, status=StatusChoices.INACTIVE
+    )
 
     return room
 
@@ -55,3 +61,34 @@ def get_token_from_scope(scope):
             return parts[1]
     else:
         return None
+
+
+def update_message_cache(chat_room_uid: str):
+    """Update the message cache for the chat room."""
+
+    # Delete the cache
+    cache_key = get_chat_room_messages_cache_key(chat_room_uid)
+    cache.delete(cache_key)
+
+    # Get the latest data
+    latest_data = (
+        Message()
+        .get_active_instance()
+        .filter(chat_room__uid=chat_room_uid)
+        .select_related(
+            "sender",
+            "attachment",
+            "reply_to__sender",
+            "reply_to__attachment",
+        )
+        .prefetch_related(
+            "read_by",
+            "message_reactions__user",
+        )
+        .order_by("-created_at")
+    )
+
+    # Set new data in cache
+    cache.set(cache_key, latest_data)
+
+    return latest_data

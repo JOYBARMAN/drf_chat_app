@@ -51,10 +51,10 @@ class ChatRoomList(ListAPIView):
         )
 
 
-class ChatRoomDetail(RetrieveAPIView):
-    """Chat room detail view"""
+# class ChatRoomDetail(RetrieveAPIView):
+#     """Chat room detail view"""
 
-    pass
+#     pass
 
 
 class GroupChatList(ListCreateAPIView):
