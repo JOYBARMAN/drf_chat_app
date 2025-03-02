@@ -3,9 +3,11 @@ import uuid
 from django.db import models
 
 from shared.choices import StatusChoices
+from shared.managers import CacheModelManager
 
 from dirtyfields import DirtyFieldsMixin
 from typing import Iterable
+
 
 class BaseModel(DirtyFieldsMixin, models.Model):
     """Base class for all other models."""
@@ -31,6 +33,16 @@ class BaseModel(DirtyFieldsMixin, models.Model):
         default=StatusChoices.ACTIVE,
         help_text="Status of the instance, typically used for soft deletion.",
     )
+
+    def save(self, *args, **kwargs):
+        """Ensure instance creation always goes through the manager."""
+        instance = super().save(*args, **kwargs)
+
+        # Update the cache
+        if getattr(self.__class__.objects, "update_cache", None):
+            self.__class__.objects.update_cache()
+
+        return instance
 
     @classmethod
     def get_active_instance(cls) -> Iterable:

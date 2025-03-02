@@ -87,6 +87,7 @@ class ChatRoomMembershipAdmin(BaseModelAdmin):
         "uid",
         "user",
         "chat_room",
+        "oponent_user",
         "role",
         "member_status",
         "has_write_access",

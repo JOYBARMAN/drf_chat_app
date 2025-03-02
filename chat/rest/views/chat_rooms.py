@@ -16,7 +16,11 @@ from chat.rest.serializers.chat_rooms import (
     ChatRoomMembershipSerializer,
     GroupChatMemberInviteSerializer,
 )
-from chat.permissions import IsChatRoomActiveMember, IsMemberHasInvitationAccess, HasUpdateAccessToRoomMembership
+from chat.permissions import (
+    IsChatRoomActiveMember,
+    IsMemberHasInvitationAccess,
+    HasUpdateAccessToRoomMembership,
+)
 
 
 class ChatRoomList(ListAPIView):
@@ -42,6 +46,7 @@ class ChatRoomList(ListAPIView):
             ChatRoomMembership.objects.filter(user=self.request.user)
             .select_related(
                 "user",
+                "oponent_user",
                 "chat_room__creator",
             )
             .annotate(

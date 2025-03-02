@@ -88,11 +88,13 @@ class ChatRoomMembershipSerializer(serializers.ModelSerializer):
 
 
 class ChatRoomMembershipListSerializer(ChatRoomMembershipSerializer):
+    oponent_user = UserSerializer(read_only=True)
     last_message_by = serializers.CharField()
     last_message_content = serializers.CharField()
 
     class Meta(ChatRoomMembershipSerializer.Meta):
         fields = ChatRoomMembershipSerializer.Meta.fields + [
+            "oponent_user",
             "last_message_by",
             "last_message_content",
         ]

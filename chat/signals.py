@@ -1,32 +1,28 @@
-# from django.db.models.signals import post_save
-# from django.dispatch import receiver
-# from django.core.cache import cache
+import json
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 
-# from chat.models import Message
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
-# from shared.cache_key import get_chat_room_messages_cache_key
+from chat.models import Message
+from chat.rest.serializers.messages import MessageSerializer
 
+@receiver(post_save, sender=Message)
+def send_message_to_ws(sender, instance, created, **kwargs):
+    """Signal to send message instance data to the WebSocket when a new message is created."""
+    if created and instance.attachment:
+        channel_layer = get_channel_layer()
+        group_name = instance.chat_room.name
 
-# @receiver(post_save, sender=Message)
-# def message_post_save(sender, instance, created, **kwargs):
-#     # Handle the message post save and update the read_by field
-#     if created:
-#         cache_key = get_chat_room_messages_cache_key(instance.chat_room.uid)
-#         latest_data = (
-#             instance.__class__.get_active_instance()
-#             .filter(chat_room__uid=instance.chat_room.uid)
-#             .select_related(
-#                 "sender",
-#                 "attachment",
-#                 "reply_to__sender",
-#                 "reply_to__attachment",
-#             )
-#             .prefetch_related(
-#                 "read_by",
-#                 "message_reactions__user",
-#             )
-#             .order_by("-created_at")
-#         )
+        # Serialize message data
+        message_data = MessageSerializer(instance).data
 
-#         # Set new data in cache
-#         cache.set(cache_key, latest_data)
+        # Send message to the WebSocket group
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "chat_message",
+                "message": json.dumps(message_data),
+            }
+        )

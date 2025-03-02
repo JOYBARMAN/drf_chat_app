@@ -3,7 +3,7 @@ import logging
 
 from django.contrib.auth import get_user_model
 
-from chat.models import ChatRoom, Message, ChatRoomMembership
+from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
 from chat.utils import generate_private_room_name, update_message_cache
 from chat.rest.serializers.messages import MessageSerializer
 
@@ -78,7 +78,7 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             await database_sync_to_async(self.message_instance.read_by.add)(self.sender)
 
         # Update the message cache
-        queryset=await database_sync_to_async(update_message_cache)(self.room.uid)
+        queryset = await database_sync_to_async(update_message_cache)(self.room.uid)
         serializer = MessageSerializer(queryset[0])
 
         # Broadcast data to the group
@@ -117,11 +117,17 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
         )
 
         if created:
-            # Add sender and receiver to the room
-            for obj in [sender, receiver]:
-                room_membership, created = await database_sync_to_async(
-                    ChatRoomMembership.objects.get_or_create
-                )(chat_room=room, user=obj)
+            # Create chat room invitation for both users
+            await database_sync_to_async(ChatRoomInvitation.objects.get_or_create)(
+                chat_room=room, sender=sender, receiver=receiver
+            )
+            # Create chat room membership for both users
+            await database_sync_to_async(ChatRoomMembership.objects.get_or_create)(
+                chat_room=room, user=sender, oponent_user=receiver
+            )
+            await database_sync_to_async(ChatRoomMembership.objects.get_or_create)(
+                chat_room=room, user=receiver, oponent_user=sender
+            )
 
         return room
 

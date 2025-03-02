@@ -11,6 +11,7 @@ from chat.choices import (
 )
 
 from shared.choices import StatusChoices
+from shared.managers import CacheModelManager
 from shared.base_model import BaseModel
 from shared.services import CacheMethod
 from shared.cache_key import (
@@ -55,6 +56,8 @@ class ChatRoom(BaseModel):
         help_text="User who created this chat room.",
     )
 
+    objects = CacheModelManager()
+
     def __str__(self):
         return self.name or self.group_name
 
@@ -74,6 +77,14 @@ class ChatRoomMembership(BaseModel):
         related_name="memberships",
         help_text="Chat room in which the user is a member.",
     )
+    oponent_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="oponent_user",
+        help_text="User who is the oponent in the private chat.",
+    )
     role = models.CharField(
         max_length=20,
         choices=UserRoleChoices.choices,
@@ -90,6 +101,8 @@ class ChatRoomMembership(BaseModel):
         default=True,
         help_text="Indicates whether the user has write access in the chat room.",
     )
+
+    objects = CacheModelManager()
 
     class Meta:
         constraints = [
@@ -171,6 +184,8 @@ class ChatRoomInvitation(BaseModel):
         help_text="Status of the invitation.",
     )
 
+    objects = CacheModelManager()
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -213,10 +228,18 @@ class ChatRoomInvitation(BaseModel):
         # Update is_accepted field based on invitation status
         if self.invitation_status == InvitationStatusChoices.ACCEPTED and self.pk:
             # Add chat memebership if invitation is accepted
-            for user in [self.sender, self.receiver]:
-                ChatRoomMembership.objects.get_or_create(
-                    user=user, chat_room=self.chat_room
-                )
+            ChatRoomMembership.objects.get_or_create(
+                user=self.sender,
+                chat_room=self.chat_room,
+                oponent_user=(
+                    self.receiver if not self.chat_room.is_group_chat else None
+                ),
+            )
+            ChatRoomMembership.objects.get_or_create(
+                user=self.receiver,
+                chat_room=self.chat_room,
+                oponent_user=self.sender if not self.chat_room.is_group_chat else None,
+            )
             # Update the chat room status for private chat
             if not self.chat_room.status == StatusChoices.ACTIVE:
                 self.chat_room.status == StatusChoices.ACTIVE
@@ -351,6 +374,8 @@ class Attachment(BaseModel):
         help_text="Emoji or short description representing the attachment.",
     )
 
+    objects = CacheModelManager()
+
     def __str__(self):
         return f"Uid: {self.uid}"
 
@@ -398,6 +423,8 @@ class Message(BaseModel):
         help_text="The message to which this message is a reply, if any.",
     )
 
+    objects = CacheModelManager()
+
     def __str__(self):
         return self.content[:50] if self.content else "No Content"
 
@@ -405,8 +432,8 @@ class Message(BaseModel):
         super().save(*args, **kwargs)
         # Update the cache
         from chat.utils import update_message_cache
-        update_message_cache(self.chat_room.uid)
 
+        update_message_cache(self.chat_room.uid)
 
 
 class MessageReaction(BaseModel):
@@ -430,6 +457,8 @@ class MessageReaction(BaseModel):
         default=ReactionChoices.NONE,
         help_text="Type of reaction given by the user.",
     )
+
+    objects = CacheModelManager()
 
     class Meta:
         constraints = [
@@ -467,6 +496,8 @@ class BlockList(BaseModel):
         related_name="blocked_by_users",
         help_text="User who blocked the user.",
     )
+
+    objects = CacheModelManager()
 
     class Meta:
         constraints = [

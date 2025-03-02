@@ -4,19 +4,24 @@ from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 
 from shared.base_model import BaseModel
+from shared.managers import CacheModelManager
 
 
-class UserManager(BaseUserManager):
+class UserManager(BaseUserManager, CacheModelManager):
     def create_user(self, email, first_name, last_name, password=None, **extra_fields):
         if not email:
             raise ValueError("The Email field is required")
 
         email = self.normalize_email(email)
         user = self.model(
-            email=email, first_name=first_name, last_name=last_name, **extra_fields
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            password=password,
+            **extra_fields,
         )
-        user.set_password(password)
         user.save(using=self._db)
+
         return user
 
     def create_superuser(
@@ -38,7 +43,7 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     username = models.CharField(max_length=50, unique=True, db_index=True)
-    password = models.CharField(max_length=128)
+    password = models.CharField(max_length=128, blank=True)
     new_password = models.CharField(max_length=128, blank=True)
     email = models.EmailField(unique=True, db_index=True)
     first_name = models.CharField(max_length=50, blank=True)
@@ -56,6 +61,8 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         return f"uid:{self.uid} {self.email}"
 
     def save(self, *args, **kwargs):
+        if not self.pk and not self.username:
+            self.username = self.email
         if not self.pk:
             self.password = make_password(self.password)
         if self.new_password:
