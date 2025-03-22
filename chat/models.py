@@ -30,8 +30,6 @@ class ChatRoom(BaseModel):
 
     name = models.CharField(
         max_length=255,
-        blank=True,
-        null=True,
         unique=True,
         db_index=True,
         help_text="Name of the chat room. Optional for private chats, recommended for group chats.",
@@ -56,10 +54,17 @@ class ChatRoom(BaseModel):
         help_text="User who created this chat room.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     def __str__(self):
         return self.name or self.group_name
+
+    def save(self, *args, **kwargs):
+        # Create a group chat room name if it is not provided
+        if not self.pk and self.is_group_chat:
+            self.name = f"group_chat_room_{self.uid}"
+
+        return super().save(*args, **kwargs)
 
 
 class ChatRoomMembership(BaseModel):
@@ -102,7 +107,7 @@ class ChatRoomMembership(BaseModel):
         help_text="Indicates whether the user has write access in the chat room.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     class Meta:
         constraints = [
@@ -184,7 +189,7 @@ class ChatRoomInvitation(BaseModel):
         help_text="Status of the invitation.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     class Meta:
         constraints = [
@@ -374,7 +379,7 @@ class Attachment(BaseModel):
         help_text="Emoji or short description representing the attachment.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     def __str__(self):
         return f"Uid: {self.uid}"
@@ -423,7 +428,7 @@ class Message(BaseModel):
         help_text="The message to which this message is a reply, if any.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     def __str__(self):
         return self.content[:50] if self.content else "No Content"
@@ -458,7 +463,7 @@ class MessageReaction(BaseModel):
         help_text="Type of reaction given by the user.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     class Meta:
         constraints = [
@@ -497,7 +502,7 @@ class BlockList(BaseModel):
         help_text="User who blocked the user.",
     )
 
-    objects = CacheModelManager()
+    # objects = CacheModelManager()
 
     class Meta:
         constraints = [

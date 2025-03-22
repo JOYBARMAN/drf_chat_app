@@ -6,8 +6,8 @@ from django.contrib.auth import get_user_model
 from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
 from chat.utils import generate_private_room_name, update_message_cache
 from chat.rest.serializers.messages import MessageSerializer
+from chat.consumers.base_consumer import BaseChatConsumer
 
-from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 CONNECTED_USERS = set()
 
 
-class PrivateChatConsumer(AsyncWebsocketConsumer):
+class PrivateChatConsumer(BaseChatConsumer):
     async def connect(self):
         # Accept connection
         await self.accept()
@@ -90,25 +90,6 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             },
         )
 
-    async def get_user(self, username=None, user_id=None):
-        if user_id:
-            # As we are validating the user_id from the token, we can safely assume that the user exists
-            return await database_sync_to_async(User.objects.get)(id=user_id)
-
-        if username:
-            # We handle error only for the username since we are using it in the URL
-            try:
-                return await database_sync_to_async(User.objects.get)(username=username)
-            except User.DoesNotExist:
-                error_message = f"{username} username not found in the database."
-                await self.send(text_data=json.dumps({"error": error_message}))
-                await self.close()
-                return
-
-    async def chat_message(self, event):
-        """Send the message to WebSocket"""
-        await self.send(text_data=event["message"])
-
     async def get_or_create_private_chat(self, sender, receiver):
         """Get or create a private chat room between two users."""
         room_name = generate_private_room_name(sender, receiver)
@@ -130,18 +111,3 @@ class PrivateChatConsumer(AsyncWebsocketConsumer):
             )
 
         return room
-
-    async def validate_message(self, text_data):
-        """Validate the send message"""
-        try:
-            # Parse the received text data as JSON
-            data = json.loads(text_data)
-            return data
-        except json.JSONDecodeError:
-            error_message = "Message format must be {'message':'your message'} "
-            await self.send(text_data=json.dumps({"error": error_message}))
-            return None
-
-    def is_error_exists(self):
-        """Checks if error exists during websockets"""
-        return True if "error" in self.scope else False

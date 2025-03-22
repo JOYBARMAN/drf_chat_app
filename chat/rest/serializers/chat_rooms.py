@@ -27,7 +27,7 @@ class ChatRoomSerializer(serializers.ModelSerializer):
             "uid",
             "created_at",
             "updated_at",
-            "group_name",
+            "name",
             "creator",
             "is_group_chat",
         ]

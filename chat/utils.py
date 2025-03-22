@@ -5,7 +5,10 @@ from rest_framework_simplejwt.tokens import AccessToken
 from .models import ChatRoom, Message
 from .choices import StatusChoices
 
-from shared.cache_key import get_chat_room_messages_cache_key
+from shared.cache_key import (
+    get_chat_room_messages_cache_key,
+    get_room_connected_users_cache_key,
+)
 
 
 def get_or_create_private_chat(user1, user2):
@@ -31,7 +34,7 @@ def generate_private_room_name(sender, receiver):
 
     # Generate a unique chat room
     user_ids = sorted([sender.id, receiver.id])
-    return f"private_room_{user_ids[0]}_{user_ids[1]}"
+    return f"private_chat_room_{user_ids[0]}_{user_ids[1]}"
 
 
 def validate_token(token):
@@ -92,3 +95,26 @@ def update_message_cache(chat_room_uid: str):
     cache.set(cache_key, latest_data)
 
     return latest_data
+
+
+def set_connected_user(room_name: str, sender):
+    """Set connected user in cache"""
+    room_connected_users = get_room_connected_users(room_name)
+    room_connected_users.add(sender)
+    cache.set(get_room_connected_users_cache_key(room_name), room_connected_users)
+
+
+def get_room_connected_users(room_name: str):
+    """Get connected users in a room"""
+    connected_users = cache.get(get_room_connected_users_cache_key(room_name))
+    if not connected_users:
+        connected_users = set()
+    return connected_users
+
+
+def remove_connected_user(room_name: str, sender):
+    """Remove connected user from the room"""
+    room_connected_users = get_room_connected_users(room_name)
+    if room_connected_users:
+        room_connected_users.remove(sender)
+    cache.set(get_room_connected_users_cache_key(room_name), room_connected_users)
