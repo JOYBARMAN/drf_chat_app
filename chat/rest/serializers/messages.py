@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from chat.models import Message, Attachment, MessageReaction, ChatRoom
 from chat.rest.serializers.friends import UserSerializer
+from chat.utils import get_room_connected_users, set_connected_user
 
 
 class AttachmentSerializer(serializers.ModelSerializer):
@@ -15,7 +16,11 @@ class AttachmentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["uid", "created_at", "updated_at"]
+        read_only_fields = [
+            "uid",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class MessageReactionSerializer(serializers.ModelSerializer):
@@ -51,7 +56,7 @@ class MessageReplySerializer(serializers.ModelSerializer):
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    content = serializers.CharField(required=False)
+    # content = serializers.CharField(required=False)
     sender = UserSerializer(read_only=True)
     read_by = UserSerializer(read_only=True, many=True)
     attachment = AttachmentSerializer(required=False)
@@ -72,17 +77,17 @@ class MessageSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = fields.copy()
-        read_only_fields.remove("content")
+        # read_only_fields.remove("content")
         read_only_fields.remove("attachment")
 
     def validate(self, attrs):
-        content = attrs.get("content")
+        # content = attrs.get("content")
         attachment = attrs.get("attachment")
         attachment_value_exists = any(attachment.values())
 
-        if not content and not attachment_value_exists:
+        if not attachment_value_exists:
             raise serializers.ValidationError(
-                "You must provide either content or attachment"
+                "You can not send empty attachment. Please provide a valid attachment."
             )
 
         return attrs
@@ -90,7 +95,7 @@ class MessageSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         room_uid = self.context["view"].kwargs.get("chat_room_uid")
         user = self.context["request"].user
-        content = validated_data.get("content")
+        # content = validated_data.get("content")
         attachment = validated_data.get("attachment")
 
         # Check if the chat room exists
@@ -98,6 +103,9 @@ class MessageSerializer(serializers.ModelSerializer):
             chat_room = ChatRoom.objects.get(uid=room_uid)
         except ChatRoom.DoesNotExist:
             raise serializers.ValidationError("Chat room not found with the given uid")
+
+        # Add to connected user
+        set_connected_user(chat_room.name, user)
 
         # Create attachment if provided
         if attachment:
@@ -107,9 +115,14 @@ class MessageSerializer(serializers.ModelSerializer):
         message = Message.objects.create(
             chat_room=chat_room,
             sender=user,
-            content=content if content else None,
+            # content=content if content else None,
             attachment=attachment if attachment else None,
         )
-        message.read_by.add(user)
+
+        # Get current connected users in the room
+        connected_users = get_room_connected_users(chat_room.name)
+
+        # Add connected users to the read_by field
+        message.read_by.add(*connected_users)
 
         return message

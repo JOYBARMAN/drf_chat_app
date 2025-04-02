@@ -1,4 +1,5 @@
 from django.core.cache import cache
+from django.core.exceptions import ValidationError
 
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -27,12 +28,6 @@ def get_or_create_private_chat(user1, user2):
 
 def generate_private_room_name(sender, receiver):
     """Generate a unique name for a private chat room between two users."""
-
-    # Ensure that the users are not the same
-    if sender == receiver:
-        raise ValueError("Users must be different")
-
-    # Generate a unique chat room
     user_ids = sorted([sender.id, receiver.id])
     return f"private_chat_room_{user_ids[0]}_{user_ids[1]}"
 

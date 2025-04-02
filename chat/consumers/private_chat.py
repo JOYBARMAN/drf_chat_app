@@ -1,37 +1,58 @@
-import json
-import logging
+import json, logging
 
 from django.contrib.auth import get_user_model
 
-from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
-from chat.utils import generate_private_room_name, update_message_cache
-from chat.rest.serializers.messages import MessageSerializer
 from chat.consumers.base_consumer import BaseChatConsumer
+from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
+from chat.utils import (
+    generate_private_room_name,
+    update_message_cache,
+    set_connected_user,
+    get_room_connected_users,
+    remove_connected_user,
+)
+from chat.rest.serializers.messages import MessageSerializer
 
 from channels.db import database_sync_to_async
 
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
-CONNECTED_USERS = set()
 
 
 class PrivateChatConsumer(BaseChatConsumer):
     async def connect(self):
         # Accept connection
         await self.accept()
-        # Check if error exists during connection
+
+        # Check if error exists during connection authentication related to user
         if self.is_error_exists():
             error = {"error": str(self.scope["error"])}
             await self.send(text_data=json.dumps(error))
-            await self.close()
+            await self.close(code=4001)
             return
 
-        # Get the sender, receiver and the room
-        self.sender = await self.get_user(user_id=self.scope["user_id"])
+        # Get the sender, receiver
+        self.sender = await self.get_user(user_id=self.scope.get("user_id", None))
         self.receiver = await self.get_user(
-            username=self.scope["url_route"]["kwargs"]["username"]
+            username=self.scope.get("url_route", {})
+            .get("kwargs", {})
+            .get("username", None)
         )
+
+        # Check sender and receiver
+        if not self.sender or not self.receiver:
+            await self.close(code=4004)
+            return
+
+        # Check user uniqueness
+        if self.sender and self.receiver and self.sender == self.receiver:
+            error = {"error": "Sender and Receiver are same user!"}
+            await self.send(text_data=json.dumps(error))
+            await self.close(code=4000)
+            return
+
+        # Get or create the room
         self.room = await self.get_or_create_private_chat(self.sender, self.receiver)
 
         # Add to the group
@@ -42,26 +63,26 @@ class PrivateChatConsumer(BaseChatConsumer):
         )
 
         # Add to connected user
-        CONNECTED_USERS.add(self.sender.id)
+        set_connected_user(self.room.name, self.sender)
 
     async def disconnect(self, close_code):
-        # Remove user from the group
-        await self.channel_layer.group_discard(
-            self.group_name,
-            self.channel_name,
-        )
+        if close_code == 1000:
+            # Remove user from the group
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name,
+            )
+
+            # Remove user from connected user
+            remove_connected_user(self.room.name, self.sender)
+
         logger.warning(f"disconnected {close_code}")
-
-        # Remove user from connected user
-        CONNECTED_USERS.remove(self.sender.id)
-
         await self.close()
 
     async def receive(self, text_data):
         data = await self.validate_message(text_data)
-        # Close the connection if data is not valid
+        # If error exists during message validation skipped sending message
         if not data:
-            await self.close()
             return
 
         # Create message instance
@@ -70,12 +91,8 @@ class PrivateChatConsumer(BaseChatConsumer):
         )
 
         # Update real time message read by funtionality
-        if self.sender.id in CONNECTED_USERS and self.receiver.id in CONNECTED_USERS:
-            await database_sync_to_async(self.message_instance.read_by.add)(
-                self.sender, self.receiver
-            )
-        else:
-            await database_sync_to_async(self.message_instance.read_by.add)(self.sender)
+        connected_user = get_room_connected_users(self.room.name)
+        await database_sync_to_async(self.message_instance.read_by.add)(*connected_user)
 
         # Update the message cache
         queryset = await database_sync_to_async(update_message_cache)(self.room.uid)

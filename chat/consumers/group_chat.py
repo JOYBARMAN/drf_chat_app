@@ -1,9 +1,8 @@
-import json
-import logging
+import json, logging
 
 from django.contrib.auth import get_user_model
 
-from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
+from chat.models import ChatRoom, Message
 from chat.consumers.base_consumer import BaseChatConsumer
 from chat.utils import (
     update_message_cache,
@@ -24,24 +23,34 @@ class GroupChatConsumer(BaseChatConsumer):
     async def connect(self):
         # Accept connection
         await self.accept()
-        # Check if error exists during connection
+
+        # Check if error exists during connection authentication related to user
         if self.is_error_exists():
             error = {"error": str(self.scope["error"])}
             await self.send(text_data=json.dumps(error))
-            await self.close()
+            await self.close(code=4001)
             return
-        # Get the sender
-        self.sender = await self.get_user(user_id=self.scope["user_id"])
+
+        # Get the sender, receiver
+        self.sender = await self.get_user(user_id=self.scope.get("user_id", None))
+
+        # Check sender
+        if not self.sender:
+            await self.close(code=4004)
+            return
+
         # Get the room name from url
-        self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
+        self.room_name = (
+            self.scope.get("url_route", {}).get("kwargs", {}).get("room_name", None)
+        )
         # Get the room instance
         self.room = await self.check_room_existance(self.room_name)
 
         # Check room existance under this room name
         if not self.room:
-            error_message = "Invalid room name"
-            await self.send(text_data=json.dumps({"error": error_message}))
-            await self.close()
+            error = {"error": "Room does not exist in the system"}
+            await self.send(text_data=json.dumps(error))
+            await self.close(code=4004)
             return
         else:
             # Add to the group
@@ -59,7 +68,6 @@ class GroupChatConsumer(BaseChatConsumer):
 
         # Close the connection if data is not valid
         if not data:
-            await self.close()
             return
 
         # Create message instance
@@ -85,16 +93,16 @@ class GroupChatConsumer(BaseChatConsumer):
         )
 
     async def disconnect(self, close_code):
-        # Remove user from the group
-        await self.channel_layer.group_discard(
-            self.group_name,
-            self.channel_name,
-        )
+        if close_code == 1000:
+            # Remove user from the group
+            await self.channel_layer.group_discard(
+                self.group_name,
+                self.channel_name,
+            )
+            # Remove user from connected user
+            remove_connected_user(self.room_name, self.sender)
+
         logger.warning(f"disconnected {close_code}")
-
-        # Remove user from connected user
-        remove_connected_user(self.room_name, self.sender)
-
         await self.close()
 
     async def check_room_existance(self, room_name: str):

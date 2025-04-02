@@ -61,10 +61,10 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         return f"uid:{self.uid} {self.email}"
 
     def save(self, *args, **kwargs):
-        if not self.pk and not self.username:
-            self.username = self.email
         if not self.pk:
             self.password = make_password(self.password)
+            self.username = self.email if not self.username else self.username
+
         if self.new_password:
             self.password = make_password(self.new_password)
             self.new_password = ""

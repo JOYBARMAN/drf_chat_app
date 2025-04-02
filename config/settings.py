@@ -196,7 +196,7 @@ CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
 CELERY_TIMEZONE = "Asia/Dhaka"
 
 
-CACHE_TTL = 60 * 15  # 15 minutes
+CACHE_TTL = 7 * 24 * 60 * 60  # 7 days in seconds
 
 CACHES = {
     "default": {

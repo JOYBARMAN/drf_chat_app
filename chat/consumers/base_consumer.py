@@ -36,7 +36,6 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
                 return await database_sync_to_async(User.objects.get)(id=user_id)
         except User.DoesNotExist:
             await self.send(text_data=json.dumps({"error": error_message}))
-            await self.close()
             return
 
     async def chat_message(self, event):
@@ -44,15 +43,30 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=event["message"])
 
     async def validate_message(self, text_data):
-        """Validate the send message"""
+        """Validate the received message"""
         try:
             # Parse the received text data as JSON
             data = json.loads(text_data)
+
+            # Check if the data is a dictionary
+            if not isinstance(data, dict):
+                raise ValueError("Invalid format. Expected a JSON object.")
+
+            # Check only message key exists in the data
+            if set(data.keys()) != {"message"}:
+                raise ValueError("Invalid format. Only {'message': 'your message'} is allowed.")
+
+            # Check message key is not empty
+            if not isinstance(data["message"], str) or not data["message"].strip():
+                raise ValueError("Invalid format. 'message' must be a non-empty string.")
+
             return data
-        except json.JSONDecodeError:
-            error_message = "Message format must be {'message':'your message'} "
+
+        except (json.JSONDecodeError, ValueError) as e:
+            error_message = str(e)
             await self.send(text_data=json.dumps({"error": error_message}))
             return None
+
 
     def is_error_exists(self):
         """Checks if error exists during websockets"""
