@@ -1,10 +1,23 @@
+import json
+
+from django.db.models import (
+    OuterRef,
+    Subquery,
+    Case,
+    When,
+    IntegerField,
+    Value,
+)
+from django.core.paginator import Paginator, EmptyPage
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
 
 from rest_framework_simplejwt.tokens import AccessToken
 
-from .models import ChatRoom, Message
-from .choices import StatusChoices
+from asgiref.sync import async_to_sync
+
+from chat.models import ChatRoom, Message, ChatRoomMembership
+from chat.choices import StatusChoices
+from chat.rest.serializers.chat_rooms import ChatRoomMembershipListSerializer
 
 from shared.cache_key import (
     get_chat_room_messages_cache_key,
@@ -113,3 +126,76 @@ def remove_connected_user(room_name: str, sender):
     if room_connected_users:
         room_connected_users.remove(sender)
     cache.set(get_room_connected_users_cache_key(room_name), room_connected_users)
+
+
+def user_chat_room_query(user):
+    """Get the chat room for the user with last message metadata."""
+
+    messages = Message.objects.filter(chat_room=OuterRef("chat_room")).order_by(
+        "-created_at"
+    )
+
+    return (
+        ChatRoomMembership.objects.filter(user=user)
+        .select_related(
+            "user",
+            "oponent_user",
+            "chat_room__creator",
+        )
+        .annotate(
+            last_message_by=Subquery(messages.values("sender__username")[:1]),
+            last_message_content=Subquery(messages.values("content")[:1]),
+            last_message_created_at=Subquery(messages.values("created_at")[:1]),
+            last_message_has_attachment=Subquery(messages.values("attachment")[:1]),
+            has_last_message=Case(
+                When(last_message_created_at__isnull=False, then=Value(1)),
+                default=Value(0),
+                output_field=IntegerField(),
+            ),
+        )
+        .filter(has_last_message=1)
+        .order_by("-last_message_created_at")
+    )
+
+
+def get_chat_room_serialized_data(user, page=1, page_size=20):
+    """Get the chat room serialized data with pagination"""
+    queryset = user_chat_room_query(user=user)
+    paginator = Paginator(queryset, page_size)
+
+    try:
+        page_obj = paginator.page(page)
+    except EmptyPage:
+        page_obj = paginator.page(paginator.num_pages)
+
+    serialized_rooms = ChatRoomMembershipListSerializer(
+        page_obj.object_list, many=True
+    ).data
+
+    return {
+        "results": serialized_rooms,
+        "pagination": {
+            "page": page_obj.number,
+            "page_size": page_size,
+            "total_pages": paginator.num_pages,
+            "total_items": paginator.count,
+        },
+    }
+
+
+def update_user_ws_chat_rooms(user, channel_layer):
+    """Update the user chat rooms in WebSocket"""
+
+    # Serialize the chat rooms
+    serialized_data = get_chat_room_serialized_data(user)
+
+    # Send the data to the user's group
+    group_name = f"user_{user.uid}_chat_rooms"
+
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            "type": "send_updated_rooms",
+            "data": json.dumps(serialized_data),
+        },
+    )

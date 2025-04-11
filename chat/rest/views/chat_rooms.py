@@ -1,5 +1,3 @@
-from django.db.models import OuterRef, Subquery, Case, When, IntegerField, Value
-
 from rest_framework.generics import (
     ListAPIView,
     RetrieveAPIView,
@@ -9,7 +7,7 @@ from rest_framework.generics import (
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import NotFound
 
-from chat.models import ChatRoomMembership, Message, ChatRoom
+from chat.models import ChatRoomMembership, ChatRoom
 from chat.rest.serializers.chat_rooms import (
     ChatRoomMembershipListSerializer,
     ChatRoomSerializer,
@@ -21,6 +19,7 @@ from chat.permissions import (
     IsMemberHasInvitationAccess,
     HasUpdateAccessToRoomMembership,
 )
+from chat.utils import user_chat_room_query
 
 
 class ChatRoomList(ListAPIView):
@@ -30,44 +29,7 @@ class ChatRoomList(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Subquery to get the last message username, content, and created_at
-        last_message_username_subquery = (
-            Message.objects.filter(chat_room=OuterRef("chat_room"))
-            .order_by("-created_at")
-            .values("sender__username")[:1]
-        )
-        last_message_content_subquery = (
-            Message.objects.filter(chat_room=OuterRef("chat_room"))
-            .order_by("-created_at")
-            .values("content")[:1]
-        )
-        last_message_created_at_subquery = (
-            Message.objects.filter(chat_room=OuterRef("chat_room"))
-            .order_by("-created_at")
-            .values("created_at")[:1]
-        )
-
-        return (
-            ChatRoomMembership.objects.filter(user=self.request.user)
-            .select_related(
-                "user",
-                "oponent_user",
-                "chat_room__creator",
-            )
-            .annotate(
-                last_message_by=Subquery(last_message_username_subquery),
-                last_message_content=Subquery(last_message_content_subquery),
-                last_message_created_at=Subquery(last_message_created_at_subquery),
-                has_last_message=Case(
-                    When(last_message_created_at__isnull=False, then=Value(1)),
-                    default=Value(0),
-                    output_field=IntegerField(),
-                ),
-            )
-            # Filter only the chat rooms with last message
-            .filter(has_last_message=1)
-            .order_by("-last_message_created_at")
-        )
+        return user_chat_room_query(user=self.request.user)
 
 
 # class ChatRoomDetail(RetrieveAPIView):

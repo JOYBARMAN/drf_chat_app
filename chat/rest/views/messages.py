@@ -1,7 +1,6 @@
 from django.core.cache import cache
 
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
-from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.exceptions import NotFound
 
 from chat.models import Message, ChatRoom
@@ -57,9 +56,11 @@ class MessageList(ListCreateAPIView):
             cache.set(cache_key, messages)
 
         # Update the read_by field for each message
-        message_ids = [message.id for message in messages]
+        message_ids = list(messages.values_list("id", flat=True))
         if message_ids:
-            update_message_read_by.delay(message_ids, user_id=self.request.user.id, room_uid=room_uid)
+            update_message_read_by.delay(
+                message_ids, user_id=self.request.user.id, room_uid=room_uid
+            )
 
         return messages
 
