@@ -1,4 +1,4 @@
-from django.db.models import OuterRef, Subquery
+from django.db.models import OuterRef, Subquery, Case, When, IntegerField, Value
 
 from rest_framework.generics import (
     ListAPIView,
@@ -30,7 +30,7 @@ class ChatRoomList(ListAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        # Subquery to get the last message username and contentin each chat room
+        # Subquery to get the last message username, content, and created_at
         last_message_username_subquery = (
             Message.objects.filter(chat_room=OuterRef("chat_room"))
             .order_by("-created_at")
@@ -40,6 +40,11 @@ class ChatRoomList(ListAPIView):
             Message.objects.filter(chat_room=OuterRef("chat_room"))
             .order_by("-created_at")
             .values("content")[:1]
+        )
+        last_message_created_at_subquery = (
+            Message.objects.filter(chat_room=OuterRef("chat_room"))
+            .order_by("-created_at")
+            .values("created_at")[:1]
         )
 
         return (
@@ -52,7 +57,14 @@ class ChatRoomList(ListAPIView):
             .annotate(
                 last_message_by=Subquery(last_message_username_subquery),
                 last_message_content=Subquery(last_message_content_subquery),
+                last_message_created_at=Subquery(last_message_created_at_subquery),
+                has_last_message=Case(
+                    When(last_message_created_at__isnull=False, then=Value(1)),
+                    default=Value(0),
+                    output_field=IntegerField(),
+                ),
             )
+            .order_by("-has_last_message", "-last_message_created_at")
         )
 
 

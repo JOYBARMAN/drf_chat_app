@@ -19,7 +19,7 @@ class MessageList(ListCreateAPIView):
     serializer_class = MessageSerializer
 
     def get_permissions(self):
-        if self.request.method in SAFE_METHODS:
+        if self.request.method == "GET":
             return [IsChatRoomActiveMember()]
         return [HasWriteAccessToChatRoom()]
 
@@ -34,6 +34,7 @@ class MessageList(ListCreateAPIView):
             raise NotFound("Chat room not found with the given uid")
 
         messages = cache.get(cache_key)
+
         if messages is None:
             messages = (
                 Message()

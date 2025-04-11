@@ -16,7 +16,8 @@ from shared.base_model import BaseModel
 from shared.services import CacheMethod
 from shared.cache_key import (
     get_user_chat_room_cache_key,
-    get_chat_room_messages_cache_key,
+    get_user_add_friends_cache_key,
+    get_user_friend_list_cache_key,
 )
 
 from versatileimagefield.fields import VersatileImageField
@@ -252,6 +253,9 @@ class ChatRoomInvitation(BaseModel):
 
         super().save(*args, **kwargs)
 
+        # Remove model related cache
+        self.remove_model_related_cache()
+
     def send_group_chat_invitation(self, chat_room, receiver, sender):
         """Send invitation to a user for a group chat room."""
 
@@ -268,7 +272,7 @@ class ChatRoomInvitation(BaseModel):
         # Get or create a private chat room
         chat_room = get_or_create_private_chat(receiver, sender)
 
-        invitation, created = self.objects.get_or_create(
+        invitation, created = self.__class__.objects.get_or_create(
             chat_room=chat_room, receiver=receiver, sender=sender
         )
 
@@ -278,6 +282,14 @@ class ChatRoomInvitation(BaseModel):
         return {"message": "Invitation sent successfully.", "invitation": invitation}
 
     @classmethod
+    def get_user_sent_invitation(self, user):
+        """Get the list of sent invitation of a user."""
+        return self.objects.filter(
+            sender=user,
+            chat_room__is_group_chat=False,
+        ).select_related("receiver")
+
+    @classmethod
     def get_user_accepted_sent_invitation(self, user):
         """Get the list of accepted sent invitation of a user."""
         return self.objects.filter(
@@ -285,6 +297,14 @@ class ChatRoomInvitation(BaseModel):
             invitation_status=InvitationStatusChoices.ACCEPTED,
             chat_room__is_group_chat=False,
         ).select_related("receiver")
+
+    @classmethod
+    def get_user_received_invitation(self, user):
+        """Get the list of received invitation of a user."""
+        return self.objects.filter(
+            receiver=user,
+            chat_room__is_group_chat=False,
+        ).select_related("sender")
 
     @classmethod
     def get_user_accepted_received_invitation(self, user):
@@ -298,6 +318,13 @@ class ChatRoomInvitation(BaseModel):
     @classmethod
     def get_user_friend_list(self, user):
         """Get the list of friends of a user."""
+        cache_key = get_user_friend_list_cache_key(user.id)
+        # First check if the data is already cached
+        # If cached data is found, return it
+        cached_data = CacheMethod().get_cache_data(cache_key=cache_key)
+        if cached_data:
+            return cached_data
+
         # Get the list of accepted sent and received invitations
         sent_invitations = self.get_user_accepted_sent_invitation(user)
         received_invitations = self.get_user_accepted_received_invitation(user)
@@ -312,28 +339,45 @@ class ChatRoomInvitation(BaseModel):
         # Remove blocked users from the list
         friends.difference_update(User.objects.filter(id__in=blocked_users))
 
-        return list(friends)
+        friend_list = list(friends)
+
+        # Set the cache friend list for the user
+        CacheMethod().set_cache_data(cache_key=cache_key, data=friend_list)
+
+        return friend_list
 
     @classmethod
     def get_user_add_friend_list(self, user):
         """Get the list of users who can be added as friends by a user."""
+        cache_key = get_user_add_friends_cache_key(user.id)
+        # First check if the data is already cached
+        # If cached data is found, return it
+        cached_data = CacheMethod().get_cache_data(cache_key=cache_key)
+        if cached_data:
+            return cached_data
 
-        # Get the list of accepted sent and received invitations
+        # Get the list of sent and received invitations
         sent_invitations = [
-            ele.receiver.id for ele in self.get_user_accepted_sent_invitation(user)
+            ele.receiver.id for ele in self.get_user_sent_invitation(user)
         ]
         received_invitations = [
-            ele.sender.id for ele in self.get_user_accepted_received_invitation(user)
+            ele.sender.id for ele in self.get_user_received_invitation(user)
         ]
 
         # Find the user who blocked the current user
         blocked_users = [ele for ele in BlockList().get_user_blocked_by_list(user)]
+
         # Arrange the exclude users list for current user
         exclude_users = set(
             sent_invitations + received_invitations + blocked_users + [user.id]
         )
 
-        return User.objects.exclude(id__in=exclude_users)
+        add_friend_list = User.objects.exclude(id__in=exclude_users)
+
+        # Set the cache add friend list for the user
+        CacheMethod().set_cache_data(cache_key=cache_key, data=add_friend_list)
+
+        return add_friend_list
 
     @classmethod
     def get_user_friend_request(self, user):
@@ -355,6 +399,25 @@ class ChatRoomInvitation(BaseModel):
             chat_room__is_group_chat=False,
         )
         return sent_invitations
+
+    def remove_model_related_cache(self):
+        """Remove the cache for ths model related to the user."""
+        # Remove add friends cache for sender and receiver
+        CacheMethod().clear_cache(
+            get_user_add_friends_cache_key(user_id=self.sender.id)
+        )
+        CacheMethod().clear_cache(
+            get_user_add_friends_cache_key(user_id=self.receiver.id)
+        )
+        # Remove friend list cache for sender and receiver
+        CacheMethod().clear_cache(
+            get_user_friend_list_cache_key(user_id=self.sender.id)
+        )
+        CacheMethod().clear_cache(
+            get_user_friend_list_cache_key(user_id=self.receiver.id)
+        )
+
+        return
 
 
 class Attachment(BaseModel):

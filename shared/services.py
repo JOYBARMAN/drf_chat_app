@@ -64,7 +64,22 @@ class CachedQuerysetMixin:
         return super().dispatch(*args, **kwargs)
 
 
-
 class CacheMethod:
+    def __init__(self):
+        self.cache_timeout = 7 * 24 * 60 * 60  # 7 days
+
+    def get_cache_data(self, cache_key):
+        """
+        Get data from the cache.
+        """
+        return cache.get(cache_key)
+
+    def set_cache_data(self, cache_key, data):
+        """
+        Set data in the cache.
+        """
+        cache.set(cache_key, data, timeout=self.cache_timeout)
+
     def clear_cache(self, cache_key):
+        """Clear the cache for the given key."""
         cache.delete(cache_key)
