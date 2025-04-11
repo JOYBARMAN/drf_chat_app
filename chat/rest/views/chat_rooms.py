@@ -64,7 +64,9 @@ class ChatRoomList(ListAPIView):
                     output_field=IntegerField(),
                 ),
             )
-            .order_by("-has_last_message", "-last_message_created_at")
+            # Filter only the chat rooms with last message
+            .filter(has_last_message=1)
+            .order_by("-last_message_created_at")
         )
 
 
