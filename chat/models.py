@@ -390,6 +390,7 @@ class ChatRoomInvitation(BaseModel):
 
         return received_invitations
 
+    @classmethod
     def get_user_sent_request(self, user):
         """Get the list of sent request of a user."""
         # Find invitations where the user is the sender and the invitation is pending
@@ -397,7 +398,8 @@ class ChatRoomInvitation(BaseModel):
             sender=user,
             invitation_status=InvitationStatusChoices.PENDING,
             chat_room__is_group_chat=False,
-        )
+        ).select_related("sender", "chat_room__creator", "receiver")
+
         return sent_invitations
 
     def remove_model_related_cache(self):

@@ -44,6 +44,17 @@ class FriendRequestListView(ListCreateAPIView):
         )
 
 
+class SentRequestListView(ListAPIView):
+    """Sent friend request list for the user"""
+
+    serializer_class = ChatRoomInvitationSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return ChatRoomInvitation().get_user_sent_request(
+            user=self.request.user
+        )
+
 class GroupChatRequestListView(ListCreateAPIView):
     """Group chat request list for the user"""
 
