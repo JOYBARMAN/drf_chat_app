@@ -47,7 +47,7 @@ class GroupChatList(ListCreateAPIView):
     def get_queryset(self):
         member_ship = ChatRoomMembership.objects.filter(
             user=self.request.user, chat_room__is_group_chat=True
-        ).select_related("chat_room__creator")
+        ).select_related("chat_room__creator__profile")
 
         return [membership.chat_room for membership in member_ship]
 
@@ -81,7 +81,7 @@ class GroupChatMember(ListCreateAPIView):
             raise NotFound("Chat room is not a group chat")
 
         return ChatRoomMembership.objects.filter(chat_room=chat_room).select_related(
-            "user", "chat_room__creator"
+            "user__profile", "chat_room__creator__profile"
         )
 
 

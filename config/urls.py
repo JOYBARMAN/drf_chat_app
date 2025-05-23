@@ -25,7 +25,7 @@ schema_view = get_schema_view(
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/v1/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/v1/user", include("core.urls")),
     path("api/v1", include("chat.rest.urls")),
 ]
 

@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import (
+from chat.models import (
     ChatRoom,
     ChatRoomMembership,
     ChatRoomInvitation,
@@ -10,31 +10,7 @@ from .models import (
     BlockList,
 )
 
-
-class BaseModelAdmin(admin.ModelAdmin):
-    """Base Model Admin with common fields from BaseModel."""
-
-    readonly_fields = [
-        "uid",
-        "created_at",
-        "updated_at",
-        "status",
-    ]
-
-    def get_readonly_fields(self, request, obj=None):
-        if obj:
-            return self.readonly_fields + [
-                "uid",
-            ]
-        return self.readonly_fields
-
-    def get_list_display(self, request):
-        list_display = super().get_list_display(request)
-        if "uid" not in list_display:
-            return [
-                "uid",
-            ] + list_display
-        return list_display
+from shared.base_admin import BaseModelAdmin
 
 
 class ChatRoomMembershipInline(admin.TabularInline):
@@ -53,7 +29,7 @@ class ChatRoomMembershipInline(admin.TabularInline):
 class ChatRoomInvitationInline(admin.TabularInline):
     model = ChatRoomInvitation
     extra = 1
-    fields = ["chat_room","receiver", "sender", "invitation_status"]
+    fields = ["chat_room", "receiver", "sender", "invitation_status"]
     # readonly_fields = ["receiver", "sender", "is_accepted", "invitation_status"]
 
 
@@ -223,6 +199,7 @@ class MessageReactionAdmin(BaseModelAdmin):
     #     "updated_at",
     #     "status",
     # ]
+
 
 @admin.register(BlockList)
 class BlockListAdmin(BaseModelAdmin):

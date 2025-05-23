@@ -1,6 +1,6 @@
 from django_redis import get_redis_connection
 
-# Get the default Redis connection from your settings
+# Get the default Redis connection from settings
 redis_client = get_redis_connection("default")
 
 # Use the RedisBloom extension

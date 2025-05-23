@@ -2,12 +2,25 @@ from django.contrib.auth import get_user_model
 
 from rest_framework import serializers
 
+from core.models import User, UserProfile
+
 from chat.models import ChatRoomInvitation
 
-User = get_user_model()
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            "uid",
+            "photo",
+            "bio",
+            "date_of_birth",
+            "gender",
+        ]
 
 
 class UserSerializer(serializers.ModelSerializer):
+    profile = UserProfileSerializer(read_only=True)
     class Meta:
         model = User
         fields = [
@@ -19,6 +32,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "last_login",
             "created_at",
+            "updated_at",
+            "profile",
         ]
         read_only_fields = fields
 

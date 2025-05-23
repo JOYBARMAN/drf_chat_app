@@ -138,9 +138,9 @@ def user_chat_room_query(user):
     return (
         ChatRoomMembership.objects.filter(user=user)
         .select_related(
-            "user",
-            "oponent_user",
-            "chat_room__creator",
+            "user__profile",
+            "oponent_user__profile",
+            "chat_room__creator__profile",
         )
         .annotate(
             last_message_by=Subquery(messages.values("sender__username")[:1]),

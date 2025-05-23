@@ -1,7 +1,9 @@
 from django.contrib.auth.base_user import BaseUserManager, AbstractBaseUser
-from django.contrib.auth.hashers import check_password, make_password
+from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+
+from core.choices import GenderChoices
 
 from shared.base_model import BaseModel
 from shared.managers import CacheModelManager
@@ -70,3 +72,16 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
             self.new_password = ""
 
         super().save(*args, **kwargs)
+
+
+class UserProfile(BaseModel):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
+    photo = models.ImageField(upload_to="profile_pictures/", blank=True)
+    bio = models.TextField(blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=20, choices=GenderChoices.choices, default=GenderChoices.NOT_SET
+    )
+
+    def __str__(self):
+        return f"Profile of {self.user.email}"

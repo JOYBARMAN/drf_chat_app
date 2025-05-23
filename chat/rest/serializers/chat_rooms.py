@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
 from chat.models import ChatRoomMembership, ChatRoom, Message, ChatRoomInvitation
-from chat.rest.serializers.friends import UserSerializer
+from chat.rest.serializers.friends import UserSerializer, UserProfileSerializer
 from chat.choices import UserRoleChoices
 
 User = get_user_model()
