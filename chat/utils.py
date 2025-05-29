@@ -19,7 +19,9 @@ from chat.models import ChatRoom, Message, ChatRoomMembership
 from chat.choices import StatusChoices
 from chat.rest.serializers.chat_rooms import ChatRoomMembershipListSerializer
 
+from shared.decorator import cache_results
 from shared.cache_key import (
+    get_user_chat_room_cache_key,
     get_chat_room_messages_cache_key,
     get_room_connected_users_cache_key,
 )
@@ -43,6 +45,11 @@ def generate_private_room_name(sender, receiver):
     """Generate a unique name for a private chat room between two users."""
     user_ids = sorted([sender.id, receiver.id])
     return f"private_chat_room_{user_ids[0]}_{user_ids[1]}"
+
+
+def get_user_chat_room_group(user):
+    """Get the group name for a user's chat rooms."""
+    return f"user_{user.uid}_chat_rooms"
 
 
 def validate_token(token):
@@ -87,13 +94,13 @@ def update_message_cache(chat_room_uid: str):
         .get_active_instance()
         .filter(chat_room__uid=chat_room_uid)
         .select_related(
-            "sender",
+            "sender__profile",
             "attachment",
-            "reply_to__sender",
+            "reply_to__sender__profile",
             "reply_to__attachment",
         )
         .prefetch_related(
-            "read_by",
+            "read_by__profile",
             "message_reactions__user",
         )
         .order_by("-created_at")
@@ -128,6 +135,7 @@ def remove_connected_user(room_name: str, sender):
     cache.set(get_room_connected_users_cache_key(room_name), room_connected_users)
 
 
+@cache_results(lambda user: get_user_chat_room_cache_key(user.id))
 def user_chat_room_query(user):
     """Get the chat room for the user with last message metadata."""
 
@@ -181,21 +189,3 @@ def get_chat_room_serialized_data(user, page=1, page_size=20):
             "total_items": paginator.count,
         },
     }
-
-
-def update_user_ws_chat_rooms(user, channel_layer):
-    """Update the user chat rooms in WebSocket"""
-
-    # Serialize the chat rooms
-    serialized_data = get_chat_room_serialized_data(user)
-
-    # Send the data to the user's group
-    group_name = f"user_{user.uid}_chat_rooms"
-
-    async_to_sync(channel_layer.group_send)(
-        group_name,
-        {
-            "type": "send_updated_rooms",
-            "data": json.dumps(serialized_data),
-        },
-    )

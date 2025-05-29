@@ -40,13 +40,13 @@ class MessageList(ListCreateAPIView):
                 .get_active_instance()
                 .filter(chat_room=chat_room)
                 .select_related(
-                    "sender",
+                    "sender__profile",
                     "attachment",
-                    "reply_to__sender",
+                    "reply_to__sender__profile",
                     "reply_to__attachment",
                 )
                 .prefetch_related(
-                    "read_by",
+                    "read_by__profile",
                     "message_reactions__user",
                 )
                 .order_by("-created_at")

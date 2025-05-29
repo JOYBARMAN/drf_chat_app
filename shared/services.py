@@ -83,3 +83,11 @@ class CacheMethod:
     def clear_cache(self, cache_key):
         """Clear the cache for the given key."""
         cache.delete(cache_key)
+
+    def clear_multiple_cache(self, cache_keys: list = []):
+        """Clear multiple cache at a time."""
+        cache.delete_many(cache_keys)
+
+    def clear_all_cache(self):
+        """Clear all cache entries."""
+        cache.clear()

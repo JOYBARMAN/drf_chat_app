@@ -23,14 +23,7 @@ logger = logging.getLogger(__name__)
 class PrivateChatConsumer(BaseChatConsumer):
     async def connect(self):
         # Accept connection
-        await self.accept()
-
-        # Check if error exists during connection authentication related to user
-        if self.is_error_exists():
-            error = {"error": str(self.scope["error"])}
-            await self.send(text_data=json.dumps(error))
-            await self.close(code=4001)
-            return
+        await self.accept_connection()
 
         # Get the sender, receiver
         self.sender = await self.get_user(user_id=self.scope.get("user_id", None))

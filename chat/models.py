@@ -147,11 +147,6 @@ class ChatRoomMembership(BaseModel):
         # Call clean to perform validations
         self.clean()
 
-        # Remove cache for the user chat room list
-        if self.pk:
-            cache_key = get_user_chat_room_cache_key(user_id=self.user.id)
-            CacheMethod().clear_cache(cache_key)
-
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -466,10 +461,15 @@ class Message(BaseModel):
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
-        # Update the cache
+        # Update the message cache after saving the message
         from chat.utils import update_message_cache
 
         update_message_cache(self.chat_room.uid)
+
+        # Update user chatroom cache for sender and receiver
+        users_set = set(self.chat_room.memberships.values_list("user__id", flat=True))
+        cache_keys = [get_user_chat_room_cache_key(user_id) for user_id in users_set]
+        CacheMethod().clear_multiple_cache(cache_keys)
 
 
 class MessageReaction(BaseModel):

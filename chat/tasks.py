@@ -1,7 +1,8 @@
-from chat.utils import update_message_cache
-
 from celery import shared_task
 from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+
+from chat.utils import update_message_cache, get_user_chat_room_group
 
 
 @shared_task
@@ -29,7 +30,6 @@ def update_message_read_by(message_ids: list, user_id: int, room_uid: str):
 @shared_task
 def update_ws_chat_rooms(user_ids: list):
     from django.contrib.auth import get_user_model
-    from chat.utils import update_user_ws_chat_rooms
 
     # Fetch the users
     users = get_user_model().objects.filter(id__in=user_ids)
@@ -39,6 +39,12 @@ def update_ws_chat_rooms(user_ids: list):
 
     # Update the WebSocket chat rooms for the user
     for user in users:
-        update_user_ws_chat_rooms(user=user, channel_layer=channel_layer)
+        group_name = get_user_chat_room_group(user)
+        async_to_sync(channel_layer.group_send)(
+            group_name,
+            {
+                "type": "send_updated_rooms",
+            },
+        )
 
     return

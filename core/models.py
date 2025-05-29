@@ -7,6 +7,7 @@ from core.choices import GenderChoices
 
 from shared.base_model import BaseModel
 from shared.managers import CacheModelManager
+from shared.redis_bloom import add_to_bloom_filter
 
 
 class UserManager(BaseUserManager, CacheModelManager):
@@ -72,6 +73,9 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
             self.new_password = ""
 
         super().save(*args, **kwargs)
+
+        # Add user to bloom filter
+        add_to_bloom_filter(username=self.username, email=self.email)
 
 
 class UserProfile(BaseModel):

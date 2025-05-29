@@ -22,7 +22,6 @@ def cache_results(get_cache_key):
             cached_data = cache.get_cache_data(cache_key=cache_key)
             if cached_data is not None:
                 return cached_data
-
             # Call the original function
             results = func(*args, **kwargs)
 

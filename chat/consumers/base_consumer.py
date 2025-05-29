@@ -22,6 +22,22 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         pass
 
+    async def accept_connection(self):
+        """Accept the WebSocket connection."""
+        # Get the subprotocols from the scope
+        subprotocols = self.scope.get("subprotocols")
+        if subprotocols:
+            await self.accept(subprotocol=subprotocols)
+        else:
+            await self.accept()
+
+        # Check if error exists during connection authentication related to user
+        if self.is_error_exists():
+            error = {"error": str(self.scope["error"])}
+            await self.send(text_data=json.dumps(error))
+            await self.close(code=4001)
+            return
+
     async def get_user(self, username=None, user_id=None):
         """Get the user instance from the database."""
         error_message = None
@@ -54,11 +70,15 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
 
             # Check only message key exists in the data
             if set(data.keys()) != {"message"}:
-                raise ValueError("Invalid format. Only {'message': 'your message'} is allowed.")
+                raise ValueError(
+                    "Invalid format. Only {'message': 'your message'} is allowed."
+                )
 
             # Check message key is not empty
             if not isinstance(data["message"], str) or not data["message"].strip():
-                raise ValueError("Invalid format. 'message' must be a non-empty string.")
+                raise ValueError(
+                    "Invalid format. 'message' must be a non-empty string."
+                )
 
             return data
 
@@ -66,7 +86,6 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
             error_message = str(e)
             await self.send(text_data=json.dumps({"error": error_message}))
             return None
-
 
     def is_error_exists(self):
         """Checks if error exists during websockets"""

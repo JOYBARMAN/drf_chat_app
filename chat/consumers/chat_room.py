@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 
 from chat.consumers.base_consumer import BaseChatConsumer
 from chat.utils import (
+    get_user_chat_room_group,
     get_chat_room_serialized_data,
 )
 
@@ -17,14 +18,7 @@ logger = logging.getLogger(__name__)
 class UserChatRoomConsumer(BaseChatConsumer):
     async def connect(self):
         # Accept connection
-        await self.accept()
-
-        # Check if error exists during connection authentication related to user
-        if self.is_error_exists():
-            error = {"error": str(self.scope["error"])}
-            await self.send(text_data=json.dumps(error))
-            await self.close(code=4001)
-            return
+        await self.accept_connection()
 
         # Get the user
         self.user = await self.get_user(user_id=self.scope.get("user_id", None))
@@ -34,7 +28,7 @@ class UserChatRoomConsumer(BaseChatConsumer):
             return
 
         # Add to the group
-        self.group_name = f"user_{self.user.uid}_chat_rooms"
+        self.group_name = get_user_chat_room_group(self.user)
         await self.channel_layer.group_add(
             self.group_name,
             self.channel_name,
@@ -55,7 +49,8 @@ class UserChatRoomConsumer(BaseChatConsumer):
 
     async def send_updated_rooms(self, event):
         """Send updated chat rooms to the user"""
-        await self.send(text_data=event["data"])
+        # await self.send(text_data=event["data"])
+        await self.receive()
 
     async def disconnect(self, close_code):
         if close_code == 1000:
