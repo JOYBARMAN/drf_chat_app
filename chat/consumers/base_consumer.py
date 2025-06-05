@@ -1,13 +1,10 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.core.cache import cache
+from django.core.paginator import Paginator, EmptyPage
 
 from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
-
-from shared.cache_key import get_room_connected_users_cache_key
-
 
 User = get_user_model()
 
@@ -54,10 +51,6 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"error": error_message}))
             return
 
-    async def chat_message(self, event):
-        """Send the message to WebSocket"""
-        await self.send(text_data=event["message"])
-
     async def validate_message(self, text_data):
         """Validate the received message"""
         try:
@@ -69,16 +62,19 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
                 raise ValueError("Invalid format. Expected a JSON object.")
 
             # Check only message key exists in the data
-            if set(data.keys()) != {"message"}:
+            allowed_keys = {"message", "page", "page_size"}
+            if (allowed_keys - set(data.keys())) == allowed_keys:
                 raise ValueError(
-                    "Invalid format. Only {'message': 'your message'} is allowed."
+                    "Invalid format. Only {'message': 'your message', 'page':'page number', 'page_size':'Number of page size'} are allowed."
                 )
 
             # Check message key is not empty
-            if not isinstance(data["message"], str) or not data["message"].strip():
-                raise ValueError(
-                    "Invalid format. 'message' must be a non-empty string."
-                )
+            message = data.get("message", None)
+            if message:
+                if not isinstance(data["message"], str) or not data["message"].strip():
+                    raise ValueError(
+                        "Invalid format. 'message' must be a non-empty string."
+                    )
 
             return data
 
@@ -86,6 +82,29 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
             error_message = str(e)
             await self.send(text_data=json.dumps({"error": error_message}))
             return None
+
+    def apply_paginations(self, queryset=[], serializer=None, page=1, page_size=20):
+        """Get the paginated response data"""
+        paginator = Paginator(queryset, page_size)
+
+        try:
+            page_obj = paginator.page(page)
+        except EmptyPage:
+            page_obj = paginator.page(paginator.num_pages)
+
+        serialized_data = serializer(page_obj.object_list, many=True).data
+
+        data = {
+            "pagination": {
+                "page": page_obj.number,
+                "page_size": page_size,
+                "total_pages": paginator.num_pages,
+                "total_items": paginator.count,
+            },
+            "results": serialized_data,
+        }
+
+        return json.dumps(data)
 
     def is_error_exists(self):
         """Checks if error exists during websockets"""

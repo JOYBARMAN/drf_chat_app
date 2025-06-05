@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
+from django.dispatch import Signal
 
 from chat.choices import (
     ReactionChoices,
@@ -10,7 +11,6 @@ from chat.choices import (
 )
 
 from shared.choices import StatusChoices
-from shared.managers import CacheModelManager
 from shared.base_model import BaseModel
 from shared.services import CacheMethod
 from shared.cache_key import (
@@ -22,7 +22,12 @@ from shared.decorator import cache_results
 
 from versatileimagefield.fields import VersatileImageField
 
+
 User = get_user_model()
+
+# Custom signal
+send_message_to_ws = Signal()
+
 ALLOWED_MEMBER_TO_SEND_INVITATION = ["ADMIN", "CO_ADMIN", "MODERATOR"]
 
 
@@ -460,16 +465,31 @@ class Message(BaseModel):
         return self.content[:50] if self.content else "No Content"
 
     def save(self, *args, **kwargs):
-        super().save(*args, **kwargs)
-        # Update the message cache after saving the message
-        from chat.utils import update_message_cache
+        # Check if the message is being created or updated
+        is_created = True if not self.pk else False
 
+        super().save(*args, **kwargs)
+
+        # Import necessary functions for updating message cache and connected users
+        from chat.utils import update_message_cache, get_room_connected_users
+
+        # Update messges read_by field after saving the message
+        connected_users = get_room_connected_users(self.chat_room.name)
+        self.read_by.add(*connected_users)
+
+        # Update the message cache after saving the message
         update_message_cache(self.chat_room.uid)
+
+        # Call the signal to send message to WebSocket
+        self.call_signal(created=is_created)
 
         # Update user chatroom cache for sender and receiver
         users_set = set(self.chat_room.memberships.values_list("user__id", flat=True))
         cache_keys = [get_user_chat_room_cache_key(user_id) for user_id in users_set]
         CacheMethod().clear_multiple_cache(cache_keys)
+
+    def call_signal(self, created: bool = False):
+        send_message_to_ws.send(sender=self.__class__, instance=self, created=created)
 
 
 class MessageReaction(BaseModel):

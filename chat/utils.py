@@ -1,5 +1,3 @@
-import json
-
 from django.db.models import (
     OuterRef,
     Subquery,
@@ -10,21 +8,23 @@ from django.db.models import (
 )
 from django.core.paginator import Paginator, EmptyPage
 from django.core.cache import cache
+from django.contrib.auth import get_user_model
 
 from rest_framework_simplejwt.tokens import AccessToken
-
-from asgiref.sync import async_to_sync
 
 from chat.models import ChatRoom, Message, ChatRoomMembership
 from chat.choices import StatusChoices
 from chat.rest.serializers.chat_rooms import ChatRoomMembershipListSerializer
 
-from shared.decorator import cache_results
+from shared.decorator import cache_results, update_cache_results
 from shared.cache_key import (
     get_user_chat_room_cache_key,
     get_chat_room_messages_cache_key,
     get_room_connected_users_cache_key,
 )
+
+
+User = get_user_model()
 
 
 def get_or_create_private_chat(user1, user2):
@@ -81,15 +81,10 @@ def get_token_from_scope(scope):
         return None
 
 
-def update_message_cache(chat_room_uid: str):
-    """Update the message cache for the chat room."""
-
-    # Delete the cache
-    cache_key = get_chat_room_messages_cache_key(chat_room_uid)
-    cache.delete(cache_key)
-
-    # Get the latest data
-    latest_data = (
+@cache_results(lambda chat_room_uid: get_chat_room_messages_cache_key(chat_room_uid))
+def chat_room_messages_query(chat_room_uid: str):
+    """Get the messages for a chat room with related data."""
+    return (
         Message()
         .get_active_instance()
         .filter(chat_room__uid=chat_room_uid)
@@ -106,10 +101,15 @@ def update_message_cache(chat_room_uid: str):
         .order_by("-created_at")
     )
 
-    # Set new data in cache
-    cache.set(cache_key, latest_data)
 
-    return latest_data
+def update_message_cache(chat_room_uid: str):
+    """Update the message cache for the chat room."""
+    # Delete the cache
+    cache_key = get_chat_room_messages_cache_key(chat_room_uid)
+    cache.delete(cache_key)
+
+    # Get the latest data
+    return chat_room_messages_query(chat_room_uid)
 
 
 def set_connected_user(room_name: str, sender):

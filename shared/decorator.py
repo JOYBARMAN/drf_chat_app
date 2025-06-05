@@ -32,3 +32,31 @@ def cache_results(get_cache_key):
         return wrapper
 
     return decorator
+
+
+def update_cache_results(get_cache_key):
+    """
+    Decorator to update the cache after the function execution.
+
+    :param get_cache_key: A callable that accepts the same arguments as the wrapped function
+    and returns a cache key.
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # Generate the cache key
+            cache_key = get_cache_key(*args, **kwargs)
+            cache = CacheMethod()
+            cache.clear_cache(cache_key=cache_key)
+
+            # Call the original function
+            results = func(*args, **kwargs)
+
+            # Update the cache with the new results
+            cache.set_cache_data(cache_key=cache_key, data=results)
+            return results
+
+        return wrapper
+
+    return decorator

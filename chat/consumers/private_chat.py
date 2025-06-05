@@ -2,18 +2,20 @@ import json, logging
 
 from django.contrib.auth import get_user_model
 
+from channels.db import database_sync_to_async
+
+
 from chat.consumers.base_consumer import BaseChatConsumer
 from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
 from chat.utils import (
     generate_private_room_name,
     update_message_cache,
     set_connected_user,
-    get_room_connected_users,
     remove_connected_user,
+    chat_room_messages_query,
 )
 from chat.rest.serializers.messages import MessageSerializer
-
-from channels.db import database_sync_to_async
+from chat.tasks import update_message_read_by
 
 
 User = get_user_model()
@@ -57,6 +59,10 @@ class PrivateChatConsumer(BaseChatConsumer):
 
         # Add to connected user
         set_connected_user(self.room.name, self.sender)
+        # Definre user already connected or not to thr room
+        self.initial_request = True
+        # Send the messages to the user
+        await self.receive(text_data=json.dumps({"page": 1, "page_size": 20}))
 
     async def disconnect(self, close_code):
         if close_code == 1000:
@@ -65,7 +71,6 @@ class PrivateChatConsumer(BaseChatConsumer):
                 self.group_name,
                 self.channel_name,
             )
-
             # Remove user from connected user
             remove_connected_user(self.room.name, self.sender)
 
@@ -78,27 +83,53 @@ class PrivateChatConsumer(BaseChatConsumer):
         if not data:
             return
 
-        # Create message instance
-        self.message_instance = await database_sync_to_async(Message.objects.create)(
-            content=data["message"], sender=self.sender, chat_room=self.room
+        self.message_instance = None
+
+        # If new message not created return from cache
+        if data.get("message", None):
+            # Create message instance
+            self.message_instance = await database_sync_to_async(
+                Message.objects.create
+            )(content=data["message"], sender=self.sender, chat_room=self.room)
+            queryset = await database_sync_to_async(update_message_cache)(self.room.uid)
+        else:
+            queryset = await database_sync_to_async(chat_room_messages_query)(
+                self.room.uid
+            )
+
+        response = self.apply_paginations(
+            queryset=queryset,
+            serializer=MessageSerializer,
+            page=data.get("page", 1),
+            page_size=data.get("page_size", 20),
         )
 
-        # Update real time message read by funtionality
-        connected_user = get_room_connected_users(self.room.name)
-        await database_sync_to_async(self.message_instance.read_by.add)(*connected_user)
+        if self.message_instance:
+            # Broadcast data to the group
+            await self.channel_layer.group_send(
+                self.group_name,
+                {
+                    "type": "chat_message",
+                },
+            )
+        else:
+            # If message instance is not created, send the paginated response
+            await self.send(text_data=response)
 
-        # Update the message cache
-        queryset = await database_sync_to_async(update_message_cache)(self.room.uid)
-        serializer = MessageSerializer(queryset[0])
-
-        # Broadcast data to the group
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "chat_message",
-                "message": json.dumps(serializer.data),
-            },
-        )
+        # Update read_by field for all messages if user have initial request
+        if self.initial_request:
+            message_ids = await database_sync_to_async(
+                lambda: list(queryset.values_list("id", flat=True))
+            )()
+            if message_ids:
+                update_message_read_by.delay(
+                    message_ids,
+                    user_id=self.sender.id,
+                    room_uid=self.room.uid,
+                    room_name=self.room.name,
+                )
+            # Set initial request to False
+            self.initial_request = False
 
     async def get_or_create_private_chat(self, sender, receiver):
         """Get or create a private chat room between two users."""
@@ -121,3 +152,7 @@ class PrivateChatConsumer(BaseChatConsumer):
             )
 
         return room
+
+    async def chat_message(self, event):
+        """Send the message to WebSocket"""
+        await self.receive(text_data=json.dumps({"page": 1, "page_size": 20}))

@@ -1,15 +1,11 @@
-from django.core.cache import cache
-
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.exceptions import NotFound
 
-from chat.models import Message, ChatRoom
+from chat.models import ChatRoom
 from chat.permissions import IsChatRoomActiveMember, HasWriteAccessToChatRoom
 from chat.rest.serializers.messages import MessageSerializer
 from chat.tasks import update_message_read_by
-
-from shared.services import CachedQuerysetMixin
-from shared.cache_key import get_chat_room_messages_cache_key
+from chat.utils import chat_room_messages_query
 
 
 class MessageList(ListCreateAPIView):
@@ -24,7 +20,6 @@ class MessageList(ListCreateAPIView):
 
     def get_queryset(self):
         room_uid = self.kwargs.get("chat_room_uid")
-        cache_key = get_chat_room_messages_cache_key(room_uid)
 
         # Check if the chat room exists
         try:
@@ -32,34 +27,16 @@ class MessageList(ListCreateAPIView):
         except ChatRoom.DoesNotExist:
             raise NotFound("Chat room not found with the given uid")
 
-        messages = cache.get(cache_key)
-
-        if messages is None:
-            messages = (
-                Message()
-                .get_active_instance()
-                .filter(chat_room=chat_room)
-                .select_related(
-                    "sender__profile",
-                    "attachment",
-                    "reply_to__sender__profile",
-                    "reply_to__attachment",
-                )
-                .prefetch_related(
-                    "read_by__profile",
-                    "message_reactions__user",
-                )
-                .order_by("-created_at")
-            )
-
-            # Set the cache
-            cache.set(cache_key, messages)
+        messages = chat_room_messages_query(chat_room.uid)
 
         # Update the read_by field for each message
         message_ids = list(messages.values_list("id", flat=True))
         if message_ids:
             update_message_read_by.delay(
-                message_ids, user_id=self.request.user.id, room_uid=room_uid
+                message_ids,
+                user_id=self.request.user.id,
+                room_uid=room_uid,
+                room_name=chat_room.name,
             )
 
         return messages

@@ -49,7 +49,6 @@ class UserChatRoomConsumer(BaseChatConsumer):
 
     async def send_updated_rooms(self, event):
         """Send updated chat rooms to the user"""
-        # await self.send(text_data=event["data"])
         await self.receive()
 
     async def disconnect(self, close_code):
