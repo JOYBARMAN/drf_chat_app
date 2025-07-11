@@ -64,3 +64,36 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         validated_data.pop("confirm_password", None)
 
         return super().create(validated_data)
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            "uid",
+            "photo",
+            "bio",
+            "date_of_birth",
+            "gender",
+        ]
+
+
+class UserSerializer(serializers.ModelSerializer):
+    profile = ProfileSerializer(read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "uid",
+            "username",
+            "username",
+            "first_name",
+            "last_name",
+            "email",
+            "last_login",
+            "created_at",
+            "updated_at",
+            "profile",
+        ]
+        read_only_fields = fields
+        ref_name = "AccountsUserWithProfileSerializer"

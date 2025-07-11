@@ -1,9 +1,13 @@
 from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 from rest_framework.exceptions import NotFound
 
-from chat.models import ChatRoom
-from chat.permissions import IsChatRoomActiveMember, HasWriteAccessToChatRoom
-from chat.rest.serializers.messages import MessageSerializer
+from chat.models import ChatRoom, Message
+from chat.permissions import (
+    IsChatRoomActiveMember,
+    HasWriteAccessToChatRoom,
+    IsOwnMessage,
+)
+from chat.rest.serializers.messages import MessageSerializer,MessageDetailSerializer
 from chat.tasks import update_message_read_by
 from chat.utils import chat_room_messages_query
 
@@ -43,4 +47,29 @@ class MessageList(ListCreateAPIView):
 
 
 class MessageDetail(RetrieveUpdateDestroyAPIView):
-    pass
+    """Message detail view"""
+
+    serializer_class = MessageDetailSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return [IsChatRoomActiveMember()]
+        return [IsOwnMessage()]
+
+    def get_object(self):
+        room_uid = self.kwargs.get("chat_room_uid")
+        message_uid = self.kwargs.get("message_uid")
+
+        # Check if the chat room exists
+        try:
+            chat_room = ChatRoom.objects.get(uid=room_uid)
+        except ChatRoom.DoesNotExist:
+            raise NotFound("Chat room not found with the given uid")
+
+        messages = chat_room_messages_query(chat_room.uid)
+
+        # Check if the message exists in the chat room
+        try:
+            return messages.get(uid=message_uid)
+        except Message.DoesNotExist:
+            raise NotFound("Message not found with the given uid in this chat room")

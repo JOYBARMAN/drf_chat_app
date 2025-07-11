@@ -426,6 +426,10 @@ class Message(BaseModel):
         blank=True,
         help_text="Text content of the message. Can be empty if only an attachment is sent.",
     )
+    is_edited = models.BooleanField(
+        default=False,
+        help_text="Indicates whether the message has been edited.",
+    )
     sender = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -523,6 +527,12 @@ class MessageReaction(BaseModel):
 
     def __str__(self):
         return f"{self.user} reacted {self.reaction_type} on {self.message}"
+
+    def save(self, *args, **kwargs):
+        """Update the message when any reaction is added or updated."""
+        super().save(*args, **kwargs)
+
+        # self.message.save()
 
 
 class BlockList(BaseModel):

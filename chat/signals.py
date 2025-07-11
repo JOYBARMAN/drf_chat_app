@@ -19,16 +19,15 @@ channel_layer = get_channel_layer()
 # @receiver(post_save, sender=Message)
 @receiver(send_message_to_ws)
 def send_message_to_ws(sender, instance, created, **kwargs):
-    """Signal to send message instance data to the WebSocket when a new message is created."""
-    if created and instance.attachment:
-        group_name = instance.chat_room.name
-        # Send message to the WebSocket group
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                "type": "chat_message",
-            },
-        )
+    """Signal to send message instance data to the WebSocket when a new message is created or updated."""
+    group_name = instance.chat_room.name
+    # Send message to the WebSocket group
+    async_to_sync(channel_layer.group_send)(
+        group_name,
+        {
+            "type": "chat_message",
+        },
+    )
 
     # Get the list of related users from the chat room memberships
     related_users = list(

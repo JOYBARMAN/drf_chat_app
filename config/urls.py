@@ -26,6 +26,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/accounts", include("accounts.rest.urls")),
     path("api/v1", include("chat.rest.urls")),
+    path("api/v1/me/notifications", include("notifications.urls")),
 ]
 
 # Add silk profiler urls
