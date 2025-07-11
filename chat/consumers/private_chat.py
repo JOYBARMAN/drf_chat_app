@@ -6,10 +6,9 @@ from channels.db import database_sync_to_async
 
 
 from chat.consumers.base_consumer import BaseChatConsumer
-from chat.models import ChatRoom, Message, ChatRoomMembership, ChatRoomInvitation
+from chat.models import ChatRoom, ChatRoomMembership, ChatRoomInvitation
 from chat.utils import (
     generate_private_room_name,
-    update_message_cache,
     set_connected_user,
     remove_connected_user,
     chat_room_messages_query,
@@ -78,24 +77,13 @@ class PrivateChatConsumer(BaseChatConsumer):
         await self.close()
 
     async def receive(self, text_data):
-        data = await self.validate_message(text_data)
+        data = await self.validate_text_data(text_data=text_data)
         # If error exists during message validation skipped sending message
         if not data:
             return
 
-        self.message_instance = None
-
-        # If new message not created return from cache
-        if data.get("message", None):
-            # Create message instance
-            self.message_instance = await database_sync_to_async(
-                Message.objects.create
-            )(content=data["message"], sender=self.sender, chat_room=self.room)
-            queryset = await database_sync_to_async(update_message_cache)(self.room.uid)
-        else:
-            queryset = await database_sync_to_async(chat_room_messages_query)(
-                self.room.uid
-            )
+        # User messages data
+        queryset = await database_sync_to_async(chat_room_messages_query)(self.room.uid)
 
         response = self.apply_paginations(
             queryset=queryset,
@@ -104,17 +92,8 @@ class PrivateChatConsumer(BaseChatConsumer):
             page_size=data.get("page_size", 20),
         )
 
-        if self.message_instance:
-            # Broadcast data to the group
-            await self.channel_layer.group_send(
-                self.group_name,
-                {
-                    "type": "chat_message",
-                },
-            )
-        else:
-            # If message instance is not created, send the paginated response
-            await self.send(text_data=response)
+        # If message instance is not created, send the paginated response
+        await self.send(text_data=response)
 
         # Update read_by field for all messages if user have initial request
         if self.initial_request:

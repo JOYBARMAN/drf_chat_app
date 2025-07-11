@@ -51,8 +51,40 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
             await self.send(text_data=json.dumps({"error": error_message}))
             return
 
-    async def validate_message(self, text_data):
-        """Validate the received message"""
+    # async def validate_message(self, text_data):
+    #     """Validate the received message"""
+    #     try:
+    #         # Parse the received text data as JSON
+    #         data = json.loads(text_data)
+
+    #         # Check if the data is a dictionary
+    #         if not isinstance(data, dict):
+    #             raise ValueError("Invalid format. Expected a JSON object.")
+
+    #         # Check only message key exists in the data
+    #         allowed_keys = {"message", "page", "page_size"}
+    #         if (allowed_keys - set(data.keys())) == allowed_keys:
+    #             raise ValueError(
+    #                 "Invalid format. Only {'message': 'your message', 'page':'page number', 'page_size':'Number of page size'} are allowed."
+    #             )
+
+    #         # Check message key is not empty
+    #         message = data.get("message", None)
+    #         if message:
+    #             if not isinstance(data["message"], str) or not data["message"].strip():
+    #                 raise ValueError(
+    #                     "Invalid format. 'message' must be a non-empty string."
+    #                 )
+
+    #         return data
+
+    #     except (json.JSONDecodeError, ValueError) as e:
+    #         error_message = str(e)
+    #         await self.send(text_data=json.dumps({"error": error_message}))
+    #         return None
+
+    async def validate_text_data(self, text_data):
+        """Validate the received text data."""
         try:
             # Parse the received text data as JSON
             data = json.loads(text_data)
@@ -62,19 +94,11 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
                 raise ValueError("Invalid format. Expected a JSON object.")
 
             # Check only message key exists in the data
-            allowed_keys = {"message", "page", "page_size"}
+            allowed_keys = {"page", "page_size"}
             if (allowed_keys - set(data.keys())) == allowed_keys:
                 raise ValueError(
-                    "Invalid format. Only {'message': 'your message', 'page':'page number', 'page_size':'Number of page size'} are allowed."
+                    "Invalid format. Only {'page':'page number', 'page_size':'Number of page size'} are allowed."
                 )
-
-            # Check message key is not empty
-            message = data.get("message", None)
-            if message:
-                if not isinstance(data["message"], str) or not data["message"].strip():
-                    raise ValueError(
-                        "Invalid format. 'message' must be a non-empty string."
-                    )
 
             return data
 
@@ -85,6 +109,7 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
 
     def apply_paginations(self, queryset=[], serializer=None, page=1, page_size=20):
         """Get the paginated response data"""
+        # print("queryset", queryset.__dict__)
         paginator = Paginator(queryset, page_size)
 
         try:

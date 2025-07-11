@@ -1,6 +1,6 @@
 from rest_framework.permissions import BasePermission, SAFE_METHODS, IsAuthenticated
 
-from chat.models import ChatRoomMembership, ChatRoom, ChatRoomInvitation
+from chat.models import ChatRoomMembership, ChatRoom, ChatRoomInvitation, Message
 
 
 class IsChatRoomActiveMember(IsAuthenticated):
@@ -76,3 +76,16 @@ class HasUpdateAccessToRoomMembership(IsAuthenticated):
             return False
 
         return room_member.role in ["ADMIN", "CO_ADMIN"]
+
+
+class IsOwnMessage(IsAuthenticated):
+    """Check if the user is the owner of the message"""
+
+    def has_permission(self, request, view):
+        if not super().has_permission(request, view):
+            return False
+
+        message_uid = view.kwargs.get("message_uid")
+        message = Message.objects.filter(uid=message_uid).first()
+
+        return message.sender == request.user if message else False

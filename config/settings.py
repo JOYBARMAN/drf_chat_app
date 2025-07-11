@@ -50,6 +50,7 @@ THIRD_PARTY_APPS = [
     "silk",
     "drf_yasg",
     "corsheaders",
+    "notifications",
 ]
 LOCAL_APPS = [
     "core.apps.CoreConfig",
@@ -67,6 +68,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "notifications.middleware.current_user_middleware.DRFCurrentUserMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "silk.middleware.SilkyMiddleware",
@@ -159,7 +161,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
-
 APPEND_SLASH = False
 
 # Setups for Django Channels layers
@@ -216,3 +217,10 @@ ENABLE_SWAGGER = True
 
 
 CORS_ALLOW_ALL_ORIGINS = True
+
+# Notification settings
+NOTIFICATIONS = {
+    "NOTIFICATION_USER_SERIALIZER": "accounts.rest.serializers.accounts.UserSerializer",
+    "NOTIFICATION_USER_SELECT_RELATED_FIELDS": ["profile"],
+    "NOTIFICATION_USER_PREFETCH_RELATED_FIELDS": [],
+}

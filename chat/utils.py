@@ -96,7 +96,7 @@ def chat_room_messages_query(chat_room_uid: str):
         )
         .prefetch_related(
             "read_by__profile",
-            "message_reactions__user",
+            "message_reactions__user__profile",
         )
         .order_by("-created_at")
     )

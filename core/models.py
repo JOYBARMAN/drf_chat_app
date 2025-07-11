@@ -77,6 +77,15 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         # Add user to bloom filter
         add_to_bloom_filter(username=self.username, email=self.email)
 
+    @property
+    def fullname(self):
+        """Return the full name of the user."""
+        return (
+            f"{self.first_name} {self.last_name}".strip()
+            if self.first_name or self.last_name
+            else self.email
+        )
+
 
 class UserProfile(BaseModel):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")

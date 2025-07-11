@@ -34,15 +34,15 @@ class BaseModel(DirtyFieldsMixin, models.Model):
         help_text="Status of the instance, typically used for soft deletion.",
     )
 
-    def save(self, *args, **kwargs):
-        """Ensure instance creation always goes through the manager."""
-        instance = super().save(*args, **kwargs)
+    # def save(self, *args, **kwargs):
+    #     """Ensure instance creation always goes through the manager."""
+    #     instance = super().save(*args, **kwargs)
 
-        # Update the cache
-        if getattr(self.__class__.objects, "update_cache", None):
-            self.__class__.objects.update_cache()
+    #     # Update the cache
+    #     if getattr(self.__class__.objects, "update_cache", None):
+    #         self.__class__.objects.update_cache()
 
-        return instance
+    #     return instance
 
     @classmethod
     def get_active_instance(cls) -> Iterable:
