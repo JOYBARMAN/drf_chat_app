@@ -271,9 +271,17 @@ class ChatRoomInvitation(BaseModel):
         )
 
         if not created:
-            return {"message": "Invitation already exists.", "invitation": invitation}
+            return {
+                "message": "Reminder sent successfully.",
+                "invitation": invitation,
+                "reminder": True,
+            }
 
-        return {"message": "Invitation sent successfully.", "invitation": invitation}
+        return {
+            "message": "Invitation sent successfully.",
+            "invitation": invitation,
+            "reminder": False,
+        }
 
     @classmethod
     def get_user_sent_invitation(self, user):

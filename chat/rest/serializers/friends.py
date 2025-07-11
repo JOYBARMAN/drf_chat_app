@@ -6,7 +6,10 @@ from core.models import User, UserProfile
 
 from chat.models import ChatRoomInvitation
 
-from shared.notification_messages import INCOMING_FRIEND_REQUEST
+from shared.notification_messages import (
+    INCOMING_FRIEND_REQUEST,
+    FRIEND_REQUEST_REMINDER,
+)
 
 from notifications.services import NotificationService
 
@@ -73,9 +76,15 @@ class AddFriendSerializer(serializers.Serializer):
         # Create a notification for the friend request
         from chat.rest.serializers.chat_rooms import ChatRoomInvitationSerializer
 
+        # Check if the invitation has a reminder
+        if room_invitation.get("reminder", False):
+            message = FRIEND_REQUEST_REMINDER.format(fullname=self.user.fullname)
+        else:
+            message = INCOMING_FRIEND_REQUEST.format(fullname=self.user.fullname)
+
         notification = NotificationService(
             requested_user=self.user,
-            message=INCOMING_FRIEND_REQUEST.format(fullname=self.user.fullname),
+            message=message,
             instance=room_invitation["invitation"],
             method="POST",
             user_list=self.requested_friend,
