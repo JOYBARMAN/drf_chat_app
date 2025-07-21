@@ -93,6 +93,7 @@ class ChatRoomMembershipListSerializer(ChatRoomMembershipSerializer):
     last_message_content = serializers.CharField()
     last_message_has_attachment = serializers.BooleanField(default=False)
     last_message_created_at = serializers.DateTimeField()
+    total_unread_messages = serializers.IntegerField(default=0)
 
     class Meta(ChatRoomMembershipSerializer.Meta):
         fields = ChatRoomMembershipSerializer.Meta.fields + [
@@ -101,6 +102,7 @@ class ChatRoomMembershipListSerializer(ChatRoomMembershipSerializer):
             "last_message_content",
             "last_message_has_attachment",
             "last_message_created_at",
+            "total_unread_messages",
         ]
         read_only_fields = fields
 

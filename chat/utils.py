@@ -5,6 +5,7 @@ from django.db.models import (
     When,
     IntegerField,
     Value,
+    Count,
 )
 from django.core.paginator import Paginator, EmptyPage
 from django.core.cache import cache
@@ -142,6 +143,14 @@ def user_chat_room_query(user):
     messages = Message.objects.filter(chat_room=OuterRef("chat_room")).order_by(
         "-created_at"
     )
+    # Count the total unread messages for user individual chat rooms
+    total_unread_messages = (
+        Message.objects.filter(chat_room=OuterRef("chat_room"))
+        .exclude(read_by=user)
+        .values("chat_room")
+        .annotate(count=Count("id"))
+        .values("count")
+    )
 
     return (
         ChatRoomMembership.objects.filter(user=user)
@@ -160,6 +169,7 @@ def user_chat_room_query(user):
                 default=Value(0),
                 output_field=IntegerField(),
             ),
+            total_unread_messages=Subquery(total_unread_messages, output_field=IntegerField()),
         )
         .filter(has_last_message=1)
         .order_by("-last_message_created_at")

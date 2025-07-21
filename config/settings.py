@@ -208,7 +208,7 @@ CACHES = {
         "OPTIONS": {
             "CLIENT_CLASS": "django_redis.client.DefaultClient",
         },
-        "TIMEOUT": CACHE_TTL,  # Default timeout
+        "TIMEOUT": CACHE_TTL,
     }
 }
 
