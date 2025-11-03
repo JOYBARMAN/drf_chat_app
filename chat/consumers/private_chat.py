@@ -15,13 +15,15 @@ from chat.utils import (
 )
 from chat.rest.serializers.messages import MessageSerializer
 from chat.tasks import update_message_read_by
-
+from chat.ws_permissions import IsAuthenticatedPermission
 
 User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
 class PrivateChatConsumer(BaseChatConsumer):
+    permession_classes = []
+
     async def connect(self):
         # Accept connection
         await self.accept_connection()

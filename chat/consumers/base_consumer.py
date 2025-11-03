@@ -10,6 +10,8 @@ User = get_user_model()
 
 
 class BaseChatConsumer(AsyncWebsocketConsumer):
+    permession_classes = []
+
     async def connect(self):
         pass
 
@@ -19,6 +21,16 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         pass
 
+    async def has_permissions(self):
+        """Check all permission classes for this consumer."""
+        for permission_class in getattr(self, "permession_classes", []):
+            has_perm = await permission_class().has_permission(
+                scope=self.scope, consumer=self
+            )
+            if not has_perm:
+                return False
+        return True
+
     async def accept_connection(self):
         """Accept the WebSocket connection."""
         # Get the subprotocols from the scope
@@ -27,6 +39,18 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
             await self.accept(subprotocol=subprotocols)
         else:
             await self.accept()
+
+        # Check the permission classes
+        if not await self.has_permissions():
+            await self.send(
+                text_data=json.dumps(
+                    {
+                        "Permission denied": "You do not have permission to access this resource."
+                    }
+                )
+            )
+            await self.close(code=4003)
+            return
 
         # Check if error exists during connection authentication related to user
         if self.is_error_exists():
@@ -50,38 +74,6 @@ class BaseChatConsumer(AsyncWebsocketConsumer):
         except User.DoesNotExist:
             await self.send(text_data=json.dumps({"error": error_message}))
             return
-
-    # async def validate_message(self, text_data):
-    #     """Validate the received message"""
-    #     try:
-    #         # Parse the received text data as JSON
-    #         data = json.loads(text_data)
-
-    #         # Check if the data is a dictionary
-    #         if not isinstance(data, dict):
-    #             raise ValueError("Invalid format. Expected a JSON object.")
-
-    #         # Check only message key exists in the data
-    #         allowed_keys = {"message", "page", "page_size"}
-    #         if (allowed_keys - set(data.keys())) == allowed_keys:
-    #             raise ValueError(
-    #                 "Invalid format. Only {'message': 'your message', 'page':'page number', 'page_size':'Number of page size'} are allowed."
-    #             )
-
-    #         # Check message key is not empty
-    #         message = data.get("message", None)
-    #         if message:
-    #             if not isinstance(data["message"], str) or not data["message"].strip():
-    #                 raise ValueError(
-    #                     "Invalid format. 'message' must be a non-empty string."
-    #                 )
-
-    #         return data
-
-    #     except (json.JSONDecodeError, ValueError) as e:
-    #         error_message = str(e)
-    #         await self.send(text_data=json.dumps({"error": error_message}))
-    #         return None
 
     async def validate_text_data(self, text_data):
         """Validate the received text data."""

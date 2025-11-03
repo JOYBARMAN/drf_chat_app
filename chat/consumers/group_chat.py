@@ -9,8 +9,10 @@ from chat.utils import (
     set_connected_user,
     get_room_connected_users,
     remove_connected_user,
+    chat_room_messages_query,
 )
 from chat.rest.serializers.messages import MessageSerializer
+from chat.tasks import update_message_read_by
 
 from channels.db import database_sync_to_async
 
@@ -55,35 +57,10 @@ class GroupChatConsumer(BaseChatConsumer):
 
         # Add to connected user
         set_connected_user(self.room_name, self.sender)
-
-    async def receive(self, text_data):
-        data = await self.validate_message(text_data)
-
-        # Close the connection if data is not valid
-        if not data:
-            return
-
-        # Create message instance
-        self.message_instance = await database_sync_to_async(Message.objects.create)(
-            content=data["message"], sender=self.sender, chat_room=self.room
-        )
-
-        # Update real time message read by funtionality
-        connected_user = get_room_connected_users(self.room_name)
-        await database_sync_to_async(self.message_instance.read_by.add)(*connected_user)
-
-        # Update the message cache
-        queryset = await database_sync_to_async(update_message_cache)(self.room.uid)
-        serializer = MessageSerializer(queryset[0])
-
-        # Broadcast data to the group
-        await self.channel_layer.group_send(
-            self.group_name,
-            {
-                "type": "chat_message",
-                "message": json.dumps(serializer.data),
-            },
-        )
+        # Definre user already connected or not to thr room
+        self.initial_request = True
+        # Send the messages to the user
+        await self.receive(text_data=json.dumps({"page": 1, "page_size": 20}))
 
     async def disconnect(self, close_code):
         if close_code == 1000:
@@ -98,8 +75,46 @@ class GroupChatConsumer(BaseChatConsumer):
         logger.warning(f"disconnected {close_code}")
         await self.close()
 
+    async def receive(self, text_data):
+        data = await self.validate_text_data(text_data=text_data)
+        # Close the connection if data is not valid
+        if not data:
+            return
+
+        # User messages data
+        queryset = await database_sync_to_async(chat_room_messages_query)(self.room.uid)
+
+        response = self.apply_paginations(
+            queryset=queryset,
+            serializer=MessageSerializer,
+            page=data.get("page", 1),
+            page_size=data.get("page_size", 20),
+        )
+
+        # If message instance is not created, send the paginated response
+        await self.send(text_data=response)
+
+        # Update read_by field for all messages if user have initial request
+        if self.initial_request:
+            message_ids = await database_sync_to_async(
+                lambda: list(queryset.values_list("id", flat=True))
+            )()
+            if message_ids:
+                update_message_read_by.delay(
+                    message_ids,
+                    user_id=self.sender.id,
+                    room_uid=self.room.uid,
+                    room_name=self.room.name,
+                )
+            # Set initial request to False
+            self.initial_request = False
+
     async def check_room_existance(self, room_name: str):
         """Check room exists in database"""
         return await database_sync_to_async(
             ChatRoom.objects.filter(name=room_name).first
         )()
+
+    async def chat_message(self, event):
+        """Send the message to WebSocket"""
+        await self.receive(text_data=json.dumps({"page": 1, "page_size": 20}))
