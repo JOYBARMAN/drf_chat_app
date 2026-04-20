@@ -152,12 +152,6 @@ ws://localhost:8000/ws/chat/
 
 ---
 
-## 📸 Demo (Optional)
-
-*Add screenshots or GIFs here to showcase real-time messaging*
-
----
-
 ## 📈 Scalability & Improvements
 
 * Deploy with **ASGI server (Daphne / Uvicorn)**
